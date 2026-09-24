@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ImageGallery, ItemThumbnail } from "@/components/ui/image-gallery";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { formatCurrency } from "@/lib/utils";
@@ -90,6 +91,8 @@ function ItemDetailPage() {
         >
           <ChevronLeft className="h-4 w-4" /> Back to catalog
         </Link>
+
+        <ImageGallery images={item.images} />
 
         <Card>
           <CardContent className="space-y-3">
@@ -219,8 +222,14 @@ function ItemDetailPage() {
                         to="/catalog/$item"
                         params={{ item: alt.code }}
                       >
-                        <div className="flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 text-sm">
-                          <span className="text-zinc-800">{alt.name}</span>
+                        <div className="flex items-center gap-2.5 rounded-lg border border-zinc-200 px-3 py-2 text-sm">
+                          <ItemThumbnail
+                            images={alt.images}
+                            className="h-9 w-9"
+                          />
+                          <span className="flex-1 truncate text-zinc-800">
+                            {alt.name}
+                          </span>
                           <Badge tone={alt.stockQty > 0 ? "success" : "danger"}>
                             {alt.stockQty > 0 ? "In stock" : "Out of stock"}
                           </Badge>

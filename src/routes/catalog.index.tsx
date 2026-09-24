@@ -5,11 +5,13 @@ import { Search } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ItemThumbnail } from "@/components/ui/image-gallery";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { formatCurrency } from "@/lib/utils";
 import { getCatalog, resolveCode } from "@/api/catalog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import type { ProductImage } from "@/api/types";
 
 export const Route = createFileRoute("/catalog/")({
   component: CatalogPage,
@@ -106,12 +108,14 @@ function ItemCard({
     price: number | null;
     stockQty: number;
     status: string;
+    images: ProductImage[];
   };
 }) {
   return (
     <Card className="transition-shadow hover:shadow-md">
-      <CardContent className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+      <CardContent className="flex items-center gap-3">
+        <ItemThumbnail images={item.images} className="h-16 w-16" />
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-zinc-900">
             {item.name}
           </p>

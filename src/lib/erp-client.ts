@@ -144,3 +144,17 @@ export async function callMethod<T>(
 export function unwrapList<T>(res: T[] | { items: T[] }): T[] {
   return Array.isArray(res) ? res : res.items;
 }
+
+/**
+ * Resolves a backend-relative file path (e.g. "/files/tile.jpg", how Item.custom_images
+ * stores them) into an absolute URL against the configured API base -- Frappe file URLs
+ * are always relative to the site root, not this frontend's own origin, so an <img src>
+ * of the bare path would 404 against the dealer portal's own domain.
+ */
+export function resolveFileUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^https?:\/\//.test(path)) return path;
+  const base = apiBase();
+  if (!base) return null;
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
