@@ -1,10 +1,11 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ItemThumbnail } from "@/components/ui/image-gallery";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
@@ -12,6 +13,8 @@ import { formatCurrency } from "@/lib/utils";
 import { getCatalog, resolveCode } from "@/api/catalog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { ProductImage } from "@/api/types";
+
+const PAGE_SIZE = 40;
 
 export const Route = createFileRoute("/catalog/")({
   component: CatalogPage,
@@ -22,16 +25,37 @@ function CatalogPage() {
   const debounced = useDebouncedValue(query, 300);
   const navigate = Route.useNavigate();
 
-  const catalogQuery = useQuery({
+  // Previously a single fixed-size page (limit: 40) with no way to see anything
+  // past it -- an item sorted beyond the 40th (alphabetically by item code) in a
+  // dealer's catalog was silently unreachable from Browse, even though it was
+  // correctly granted visibility on the backend. Infinite-scroll pagination
+  // (offset-driven, using the total/offset the backend already returns) fixes
+  // that instead of just raising the cap, which would only move the cutoff.
+  const catalogQuery = useInfiniteQuery({
     queryKey: ["catalog", debounced],
-    queryFn: () => getCatalog({ search: debounced || undefined, limit: 40 }),
+    queryFn: ({ pageParam }) =>
+      getCatalog({
+        search: debounced || undefined,
+        limit: PAGE_SIZE,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const fetched = lastPage.offset + lastPage.items.length;
+      return fetched < lastPage.total ? fetched : undefined;
+    },
   });
+
+  const items = React.useMemo(
+    () => catalogQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [catalogQuery.data],
+  );
 
   const codeQuery = useQuery({
     queryKey: ["resolve-code", debounced],
     queryFn: () => resolveCode(debounced),
     enabled:
-      debounced.length > 0 && (catalogQuery.data?.items.length ?? 0) === 0,
+      debounced.length > 0 && catalogQuery.isSuccess && items.length === 0,
   });
 
   return (
@@ -55,7 +79,7 @@ function CatalogPage() {
           />
         )}
 
-        {catalogQuery.data && catalogQuery.data.items.length === 0 && (
+        {catalogQuery.isSuccess && items.length === 0 && (
           <div className="pt-2">
             {codeQuery.data ? (
               <button
@@ -80,7 +104,7 @@ function CatalogPage() {
         )}
 
         <div className="space-y-3">
-          {catalogQuery.data?.items.map((item) => (
+          {items.map((item) => (
             <Link
               key={item.id}
               to="/catalog/$item"
@@ -90,6 +114,17 @@ function CatalogPage() {
             </Link>
           ))}
         </div>
+
+        {catalogQuery.hasNextPage && (
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={catalogQuery.isFetchingNextPage}
+            onClick={() => void catalogQuery.fetchNextPage()}
+          >
+            {catalogQuery.isFetchingNextPage ? "Loading…" : "Load more"}
+          </Button>
+        )}
       </div>
     </AppShell>
   );
