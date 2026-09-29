@@ -16,19 +16,47 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { user, requestOtp, verifyOtp } = useAuth();
+  const { user, requestOtp, verifyOtp, loginWithPassword } = useAuth();
   const navigate = useNavigate();
   const search = Route.useSearch();
 
+  const [method, setMethod] = React.useState<"otp" | "password">("otp");
   const [step, setStep] = React.useState<"phone" | "otp">("phone");
   const [phone, setPhone] = React.useState("");
   const [otp, setOtp] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     if (user) navigate({ to: search.redirect ?? "/catalog" });
   }, [user, navigate, search.redirect]);
+
+  function switchMethod(next: "otp" | "password") {
+    setMethod(next);
+    setStep("phone");
+    setError(null);
+  }
+
+  async function handleLoginWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await loginWithPassword(email.trim(), password);
+      navigate({ to: search.redirect ?? "/catalog" });
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Something went wrong. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -76,11 +104,77 @@ function LoginPage() {
             Pacific Dealer Portal
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Sign in with your registered phone number
+            {method === "otp"
+              ? "Sign in with your registered phone number"
+              : "Sign in with your email and password"}
           </p>
         </div>
 
-        {step === "phone" ? (
+        <div className="mb-6 flex rounded-lg border border-zinc-200 bg-white p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => switchMethod("otp")}
+            className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
+              method === "otp"
+                ? "bg-zinc-900 text-white"
+                : "text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            Phone (OTP)
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMethod("password")}
+            className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
+              method === "password"
+                ? "bg-zinc-900 text-white"
+                : "text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            Email &amp; Password
+          </button>
+        </div>
+
+        {method === "password" ? (
+          <form onSubmit={handleLoginWithPassword} className="space-y-3">
+            <label className="block text-sm font-medium text-zinc-700">
+              Email
+              <Input
+                type="email"
+                inputMode="email"
+                autoFocus
+                autoComplete="username"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1.5"
+              />
+            </label>
+            <label className="block text-sm font-medium text-zinc-700">
+              Password
+              <Input
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1.5"
+              />
+            </label>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button
+              type="submit"
+              loading={submitting}
+              disabled={!email.trim() || !password}
+            >
+              Sign in
+            </Button>
+            <p className="text-center text-xs text-zinc-400">
+              Forgot your password? Switch to Phone (OTP) to sign in, then set a
+              new one from your Profile.
+            </p>
+          </form>
+        ) : step === "phone" ? (
           <form onSubmit={handleRequestOtp} className="space-y-3">
             <label className="block text-sm font-medium text-zinc-700">
               Phone number

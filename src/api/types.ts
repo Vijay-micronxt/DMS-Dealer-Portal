@@ -107,6 +107,9 @@ export type DealerProfile = {
   id: string;
   name: string;
   phone: string | null;
+  /** The dealer portal's second login identifier (see lib/auth's
+   * loginWithPassword) -- null until the dealer sets one themselves. */
+  email: string | null;
   classification: string | null;
 };
 

@@ -200,6 +200,43 @@ export async function verifyOtp(
   return user;
 }
 
+/** Second way in, for a dealer who's already set a password (see setMyPassword) --
+ * same generic error regardless of whether the email is unregistered, has never had
+ * a password set, or the password is simply wrong (see backend docstring), so the UI
+ * must show one generic message here, never branch its wording on the failure. */
+export async function loginWithPassword(
+  email: string,
+  password: string,
+): Promise<DealerUser> {
+  const res = await callMethod<TokenResponse>(
+    "dms_erp.auth.dealer_api.login_with_password",
+    {
+      method: "POST",
+      params: { email, password, device_id: deviceId() },
+    },
+  );
+  const user = mapBackendUser(res.user);
+  persistSession(
+    {
+      accessToken: res.access_token,
+      refreshToken: res.refresh_token,
+      expiresAt: Date.now() + res.expires_in * 1000,
+    },
+    user,
+  );
+  return user;
+}
+
+/** Lets an already-signed-in dealer set or change their own password, so
+ * loginWithPassword has something to check next time. Requires an email already
+ * on file (profile.updateMyEmail) -- the backend rejects this otherwise. */
+export async function setMyPassword(password: string): Promise<void> {
+  await authedCall("dms_erp.auth.dealer_api.set_my_password", {
+    method: "POST",
+    params: { password },
+  });
+}
+
 export function signOut() {
   hydrate();
   if (tokens) {
@@ -235,7 +272,15 @@ export function useAuth() {
   );
   const authPending = snapshot === PENDING;
   const user = authPending ? null : snapshot;
-  return { user, authPending, requestOtp, verifyOtp, signOut };
+  return {
+    user,
+    authPending,
+    requestOtp,
+    verifyOtp,
+    loginWithPassword,
+    setMyPassword,
+    signOut,
+  };
 }
 
 /** For api/*.ts callers: the current access token, refreshing first if needed. Throws
