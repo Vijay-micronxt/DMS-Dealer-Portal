@@ -112,6 +112,7 @@ function ItemDetailPage() {
               </Badge>
               {item.series && <Badge tone="info">{item.series}</Badge>}
               {!item.isSellable && <Badge tone="neutral">{item.status}</Badge>}
+              {!item.orderable && <Badge tone="info">Inquire only</Badge>}
             </div>
 
             <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -201,7 +202,30 @@ function ItemDetailPage() {
           </Card>
         )}
 
-        {raisedInquiry && inStock && <ConvertPanel inquiry={raisedInquiry} />}
+        {raisedInquiry && inStock && item.orderable && (
+          <ConvertPanel inquiry={raisedInquiry} />
+        )}
+
+        {raisedInquiry && inStock && !item.orderable && (
+          // ISS-2026-00644 -- this item isn't in your Dealer Catalog assignment yet;
+          // convert_to_order would reject it server-side either way, so the "Convert
+          // to order" step is never shown at all for it.
+          <Card>
+            <CardContent className="space-y-2">
+              <p className="text-sm text-zinc-700">
+                Your enquiry <strong>{raisedInquiry.number}</strong> has been
+                logged. This item isn't yet set up for ordering on your account
+                — our team will follow up to get it added.
+              </p>
+              <Link
+                to="/inquiries"
+                className="block text-center text-sm font-medium text-zinc-900 underline"
+              >
+                View my enquiries
+              </Link>
+            </CardContent>
+          </Card>
+        )}
 
         {raisedInquiry && !inStock && (
           <Card>
