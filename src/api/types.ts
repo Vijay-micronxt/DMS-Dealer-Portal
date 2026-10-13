@@ -52,6 +52,10 @@ export type CatalogItem = {
   hsnCode: string | null;
   dealerCode: string | null;
   topBatches: BatchSummary[];
+  /** ISS-2026-00644 — every sellable item now shows up in Browse, assigned or not;
+   * this is what actually distinguishes an orderable item from one that can only be
+   * enquired on (raiseInquiry still works either way; convertToOrder doesn't). */
+  orderable: boolean;
 };
 
 export type Inquiry = {
