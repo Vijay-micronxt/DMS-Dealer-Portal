@@ -28,6 +28,11 @@ export type CatalogItem = {
   size: string | null;
   finish: string | null;
   color: string | null;
+  /** ISS-2026-00632 — secondary colour/design descriptors, filterable in Browse. */
+  colourAttribute1: string | null;
+  colourAttribute2: string | null;
+  designAttribute1: string | null;
+  designAttribute2: string | null;
   series: string | null;
   seriesRef: string | null;
   category: string | null;

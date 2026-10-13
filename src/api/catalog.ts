@@ -4,13 +4,76 @@ import type { CatalogItem, Paginated } from "@/api/types";
 export function getCatalog(params: {
   search?: string | undefined;
   category?: string | undefined;
+  color?: string | undefined;
+  colourAttribute1?: string | undefined;
+  colourAttribute2?: string | undefined;
+  designAttribute1?: string | undefined;
+  designAttribute2?: string | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }): Promise<Paginated<CatalogItem>> {
+  const {
+    colourAttribute1,
+    colourAttribute2,
+    designAttribute1,
+    designAttribute2,
+    ...rest
+  } = params;
   return authedCall("dms_erp.sales.dealer_portal_api.get_catalog", {
     method: "GET",
-    params,
+    params: {
+      ...rest,
+      colour_attribute_1: colourAttribute1,
+      colour_attribute_2: colourAttribute2,
+      design_attribute_1: designAttribute1,
+      design_attribute_2: designAttribute2,
+    },
   });
+}
+
+// ISS-2026-00632 #4 — distinct values already present in this dealer's own catalog, for
+// Browse's filter dropdowns (dealer_portal_api.list_catalog_*, scoped per-dealer so an
+// option never produces an empty result when picked).
+export function listCatalogColors(): Promise<string[]> {
+  return authedCall("dms_erp.sales.dealer_portal_api.list_catalog_colors", {
+    method: "GET",
+  });
+}
+
+export function listCatalogColourAttribute1(): Promise<string[]> {
+  return authedCall(
+    "dms_erp.sales.dealer_portal_api.list_catalog_colour_attribute_1",
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function listCatalogColourAttribute2(): Promise<string[]> {
+  return authedCall(
+    "dms_erp.sales.dealer_portal_api.list_catalog_colour_attribute_2",
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function listCatalogDesignAttribute1(): Promise<string[]> {
+  return authedCall(
+    "dms_erp.sales.dealer_portal_api.list_catalog_design_attribute_1",
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function listCatalogDesignAttribute2(): Promise<string[]> {
+  return authedCall(
+    "dms_erp.sales.dealer_portal_api.list_catalog_design_attribute_2",
+    {
+      method: "GET",
+    },
+  );
 }
 
 /** Search by either the dealer's own mapped code or the company item code (BRD C.13.1) --
