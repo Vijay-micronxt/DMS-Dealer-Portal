@@ -79,8 +79,11 @@ function InquiriesPage() {
                 <CardContent className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-zinc-900">
-                      {inquiry.productId}
+                      {inquiry.productId ?? inquiry.requestedStyle}
                     </p>
+                    {!inquiry.productId && (
+                      <p className="text-xs text-zinc-500">Custom style</p>
+                    )}
                     <p className="text-xs text-zinc-500">
                       {inquiry.qty} boxes · {formatDate(inquiry.date)}
                     </p>

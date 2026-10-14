@@ -63,7 +63,11 @@ export type Inquiry = {
   number: string;
   date: string;
   dealerId: string;
-  productId: string;
+  /** null for a Custom Style enquiry (ISS-2026-00636) -- see requestedStyle. */
+  productId: string | null;
+  /** ISS-2026-00636 -- the style name typed through WhatsApp's "Custom Style"
+   * option, when the enquiry has no catalog item; null otherwise. */
+  requestedStyle: string | null;
   qty: number;
   weightPerBoxKg: number | null;
   totalWeightKg: number | null;
@@ -75,6 +79,10 @@ export type Inquiry = {
   remarks: string | null;
   whatsappReplied: boolean;
   customerPo: string | null;
+  /** ISS-2026-00644 -- false for an item not in your assigned catalog, and for a
+   * Custom Style enquiry; convert_to_order refuses both, so "Convert to order"
+   * is hidden rather than shown and left to fail. */
+  orderable: boolean;
   /** Only present on the response to raise_inquiry -- a recent open duplicate's id, if any. */
   duplicateOf?: string | null;
 };
