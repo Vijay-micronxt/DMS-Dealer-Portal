@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { ImageGallery, ItemThumbnail } from "@/components/ui/image-gallery";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
-import { formatCurrency } from "@/lib/utils";
+import { EnquiryListLink } from "@/components/EnquiryListLink";
+import { addToEnquiryList } from "@/lib/enquiry-list";
 import { getItem, suggestAlternatives } from "@/api/catalog";
-import { raiseInquiry, convertToOrder } from "@/api/inquiries";
+import { raiseInquiry } from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
 import type { Inquiry } from "@/api/types";
 
@@ -34,6 +35,7 @@ function ItemDetailPage() {
     null,
   );
   const [error, setError] = React.useState<string | null>(null);
+  const [added, setAdded] = React.useState(false);
 
   const raiseMutation = useMutation({
     mutationFn: () =>
@@ -92,6 +94,8 @@ function ItemDetailPage() {
           <ChevronLeft className="h-4 w-4" /> Back to catalog
         </Link>
 
+        <EnquiryListLink />
+
         <ImageGallery images={item.images} />
 
         <Card>
@@ -120,12 +124,6 @@ function ItemDetailPage() {
                 <dt className="text-zinc-400">Size / Finish</dt>
                 <dd className="text-zinc-900">
                   {[item.size, item.finish].filter(Boolean).join(" / ") || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-zinc-400">Price / box</dt>
-                <dd className="font-medium text-zinc-900">
-                  {formatCurrency(item.price)}
                 </dd>
               </div>
               <div>
@@ -168,9 +166,13 @@ function ItemDetailPage() {
             <CardContent className="space-y-3">
               <h2 className="text-sm font-semibold text-zinc-900">
                 {inStock
-                  ? "Raise an enquiry for this item"
+                  ? "Enquire about this item"
                   : "Raise an out-of-stock enquiry"}
               </h2>
+              <p className="text-xs text-zinc-500">
+                Pacific will send you a quotation with the price. Add several
+                items to your enquiry list to ask about them together.
+              </p>
               <label className="block text-sm font-medium text-zinc-700">
                 Quantity (boxes)
                 <Input
@@ -191,31 +193,46 @@ function ItemDetailPage() {
                 />
               </label>
               {error && <p className="text-sm text-red-600">{error}</p>}
+              {added && (
+                <p className="text-sm text-emerald-700">
+                  Added to your enquiry list.
+                </p>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  addToEnquiryList({
+                    code: item.code,
+                    name: item.name,
+                    qty: Number(qty),
+                  });
+                  setQty("");
+                  setAdded(true);
+                }}
+                disabled={!qty || Number(qty) <= 0}
+              >
+                Add to enquiry list
+              </Button>
               <Button
                 onClick={() => raiseMutation.mutate()}
                 loading={raiseMutation.isPending}
                 disabled={!qty || Number(qty) <= 0}
               >
-                Raise enquiry
+                Send this enquiry now
               </Button>
             </CardContent>
           </Card>
         )}
 
-        {raisedInquiry && inStock && item.orderable && (
-          <ConvertPanel inquiry={raisedInquiry} />
-        )}
-
-        {raisedInquiry && inStock && !item.orderable && (
-          // ISS-2026-00644 -- this item isn't in your Dealer Catalog assignment yet;
-          // convert_to_order would reject it server-side either way, so the "Convert
-          // to order" step is never shown at all for it.
+        {raisedInquiry && inStock && (
           <Card>
             <CardContent className="space-y-2">
               <p className="text-sm text-zinc-700">
                 Your enquiry <strong>{raisedInquiry.number}</strong> has been
-                logged. This item isn't yet set up for ordering on your account
-                — our team will follow up to get it added.
+                logged.{" "}
+                {item.orderable
+                  ? "Pacific will send you a quotation — you can accept it there to place the order."
+                  : "This item isn't yet set up for ordering on your account — our team will follow up to get it added and quote you."}
               </p>
               <Link
                 to="/inquiries"
@@ -274,83 +291,5 @@ function ItemDetailPage() {
         )}
       </div>
     </AppShell>
-  );
-}
-
-function ConvertPanel({ inquiry }: { inquiry: Inquiry }) {
-  const [po, setPo] = React.useState("");
-  const [dispatchDate, setDispatchDate] = React.useState("");
-  const [error, setError] = React.useState<string | null>(null);
-  const [done, setDone] = React.useState(false);
-
-  const convertMutation = useMutation({
-    mutationFn: () =>
-      convertToOrder({
-        inquiry: inquiry.id,
-        expected_dispatch: dispatchDate,
-        customer_po: po.trim(),
-      }),
-    onSuccess: () => setDone(true),
-    onError: (err) =>
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Could not convert to an order.",
-      ),
-  });
-
-  if (done) {
-    return (
-      <Card>
-        <CardContent className="space-y-2 text-center">
-          <p className="text-sm font-medium text-zinc-900">
-            Order placed successfully.
-          </p>
-          <Link
-            to="/orders"
-            className="text-sm font-medium text-zinc-900 underline"
-          >
-            View my orders
-          </Link>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardContent className="space-y-3">
-        <h2 className="text-sm font-semibold text-zinc-900">
-          In stock — enter your PO number to place the order
-        </h2>
-        <label className="block text-sm font-medium text-zinc-700">
-          Your PO number
-          <Input
-            value={po}
-            onChange={(e) => setPo(e.target.value)}
-            className="mt-1.5"
-            placeholder="PO-2026-001"
-          />
-        </label>
-        <label className="block text-sm font-medium text-zinc-700">
-          Expected dispatch date
-          <Input
-            type="date"
-            value={dispatchDate}
-            onChange={(e) => setDispatchDate(e.target.value)}
-            className="mt-1.5"
-          />
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <Button
-          variant="secondary"
-          onClick={() => convertMutation.mutate()}
-          loading={convertMutation.isPending}
-          disabled={!po.trim() || !dispatchDate}
-        >
-          Convert to order
-        </Button>
-      </CardContent>
-    </Card>
   );
 }

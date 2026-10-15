@@ -20,7 +20,9 @@ export type BatchSummary = {
 
 /** dms_erp.sales.dealer_portal_api's catalog entry -- catalog.api.get_product's shape
  * with the full per-dealer `dealerCodes` list stripped down to just this dealer's own
- * `dealerCode`, plus `price` (this dealer's tier rate) and `topBatches`. */
+ * `dealerCode`, plus `topBatches`. There is deliberately no price here: Pacific's
+ * price to a dealer depends on delivery and other details, so it appears only on a
+ * quotation. */
 export type CatalogItem = {
   id: string;
   code: string;
@@ -38,8 +40,6 @@ export type CatalogItem = {
   category: string | null;
   swatch: string | null;
   stockQty: number;
-  dealerPrice: number | null;
-  price: number | null;
   status: string;
   isReorderable: boolean;
   isSellable: boolean;
@@ -79,12 +79,94 @@ export type Inquiry = {
   remarks: string | null;
   whatsappReplied: boolean;
   customerPo: string | null;
-  /** ISS-2026-00644 -- false for an item not in your assigned catalog, and for a
-   * Custom Style enquiry; convert_to_order refuses both, so "Convert to order"
-   * is hidden rather than shown and left to fail. */
+  /** ISS-2026-00644 -- false for an item not in your assigned catalog (and for a Custom
+   * Style enquiry): it can be enquired on, but Pacific can't quote it for ordering yet. */
   orderable: boolean;
+  /** Several items raised together share one group id (the first enquiry's number). */
+  requestGroup: string | null;
+  /** The quotation Pacific prepared for this enquiry -- where the dealer sees the price and
+   * accepts it to place the order. null until one is sent. */
+  linkedQuotation: string | null;
   /** Only present on the response to raise_inquiry -- a recent open duplicate's id, if any. */
   duplicateOf?: string | null;
+};
+
+export type QuotationLine = {
+  itemCode: string;
+  itemName: string;
+  qty: number;
+  /** The rate before any discount. */
+  priceListRate: number;
+  discountPercentage: number;
+  rate: number;
+  amount: number;
+  deliveryDate: string | null;
+  weightPerBoxKg: number | null;
+  totalWeightKg: number | null;
+};
+
+export type QuotationTax = {
+  description: string;
+  rate: number;
+  amount: number;
+};
+
+/** What Pacific is offering: items, rates, tax, freight, and until when. Accepting it
+ * (with the dealer's own PO number) is what places the order. */
+export type Quotation = {
+  id: string;
+  number: string;
+  date: string;
+  validTill: string | null;
+  status: string;
+  /** Open, not expired, not already ordered -- the backend decides, not the client clock. */
+  canAccept: boolean;
+  lines: QuotationLine[];
+  netTotal: number;
+  taxes: QuotationTax[];
+  totalTaxesAndCharges: number;
+  freight: number;
+  deliveryPincode: string | null;
+  /** Items + tax + freight. */
+  totalPayable: number;
+  inquiryIds: string[];
+};
+
+export type Invoice = {
+  id: string;
+  date: string;
+  type: string;
+  netTotal: number;
+  taxTotal: number;
+  grandTotal: number;
+  vehicleNo: string | null;
+  lrNo: string | null;
+};
+
+export type InvoiceDetail = Invoice & {
+  dueDate: string | null;
+  poNumber: string | null;
+  address: string | null;
+  remarks: string | null;
+  transport: Record<string, string | null>;
+  items: {
+    itemCode: string;
+    itemName: string;
+    qty: number;
+    uom: string | null;
+    rate: number;
+    amount: number;
+    /** The batch this line was supplied from, when the invoice records one. */
+    batchNo: string | null;
+  }[];
+  taxes: { description: string; rate: number; amount: number }[];
+  receipts: {
+    id: string;
+    date: string;
+    mode: string | null;
+    referenceNo: string | null;
+    amount: number;
+  }[];
 };
 
 export type OrderLine = {

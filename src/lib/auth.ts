@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { clearEnquiryList } from "@/lib/enquiry-list";
 import { ApiError, callMethod } from "@/lib/erp-client";
 
 type AuthedCallOptions = {
@@ -238,6 +239,8 @@ export async function setMyPassword(password: string): Promise<void> {
 }
 
 export function signOut() {
+  // The enquiry list belongs to whoever built it -- never carried into the next login.
+  clearEnquiryList();
   hydrate();
   if (tokens) {
     callMethod("dms_erp.auth.api.logout", {

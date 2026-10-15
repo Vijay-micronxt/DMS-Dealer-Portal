@@ -1,5 +1,5 @@
 import { authedCall } from "@/lib/auth";
-import type { Inquiry, Order, Paginated } from "@/api/types";
+import type { Inquiry, Paginated } from "@/api/types";
 
 export function raiseInquiry(params: {
   item: string;
@@ -12,16 +12,16 @@ export function raiseInquiry(params: {
   });
 }
 
-/** BRD C.13.1 -- converts an in-stock enquiry straight to an order, tagged with the
- * dealer's own PO number. Only works on an enquiry this dealer owns. */
-export function convertToOrder(params: {
-  inquiry: string;
-  expected_dispatch: string;
-  customer_po: string;
-}): Promise<Order> {
-  return authedCall("dms_erp.sales.dealer_portal_api.convert_to_order", {
+/** Several items enquired on in one go. Each becomes its own enquiry; they share one
+ * `requestGroup` so Pacific can quote them together. Nothing is created unless every
+ * line is valid. */
+export function raiseInquiries(params: {
+  items: { item: string; qty: number }[];
+  remarks?: string | undefined;
+}): Promise<{ requestGroup: string; items: Inquiry[] }> {
+  return authedCall("dms_erp.sales.dealer_portal_api.raise_inquiries", {
     method: "POST",
-    params,
+    params: { items: JSON.stringify(params.items), remarks: params.remarks },
   });
 }
 

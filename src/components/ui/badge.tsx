@@ -36,6 +36,7 @@ export function toneForStatus(status: string): BadgeTone {
     "Delivered",
     "Converted to Order",
     "Active",
+    "Ordered",
   ]);
   const warning = new Set([
     "Open",
@@ -52,6 +53,8 @@ export function toneForStatus(status: string): BadgeTone {
     "Rejected",
     "Cancelled",
     "Discontinued",
+    "Expired",
+    "Lost",
   ]);
   if (positive.has(status)) return "success";
   if (warning.has(status)) return "warning";
