@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { ItemThumbnail } from "@/components/ui/image-gallery";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
-import { formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { getCatalog, resolveCode } from "@/api/catalog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { ProductImage } from "@/api/types";
@@ -20,7 +21,15 @@ export const Route = createFileRoute("/catalog/")({
   component: CatalogPage,
 });
 
+// ISS-2026-00644 + client request (Oct 2026): items outside the dealer's own catalogue
+// are a separate section, not mixed into one list -- they can be enquired on, not ordered.
+const SECTIONS = [
+  { scope: "assigned", label: "Your catalogue" },
+  { scope: "other", label: "Other items" },
+] as const;
+
 function CatalogPage() {
+  const [scope, setScope] = React.useState<"assigned" | "other">("assigned");
   const [query, setQuery] = React.useState("");
   const debounced = useDebouncedValue(query, 300);
   const navigate = Route.useNavigate();
@@ -38,9 +47,10 @@ function CatalogPage() {
   // dealer_portal_api.get_catalog/_catalog_search_matches) -- one box to type
   // "Rustic" into, instead of hunting through four dropdowns for it.
   const catalogQuery = useInfiniteQuery({
-    queryKey: ["catalog", debounced],
+    queryKey: ["catalog", scope, debounced],
     queryFn: ({ pageParam }) =>
       getCatalog({
+        scope,
         search: debounced || undefined,
         limit: PAGE_SIZE,
         offset: pageParam,
@@ -67,6 +77,31 @@ function CatalogPage() {
   return (
     <AppShell>
       <div className="space-y-4">
+        <EnquiryListLink />
+
+        <div className="flex gap-1 rounded-xl bg-zinc-200/70 p-1">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.scope}
+              onClick={() => setScope(s.scope)}
+              className={cn(
+                "flex-1 rounded-lg px-3 py-2 text-sm font-medium",
+                scope === s.scope
+                  ? "bg-white text-zinc-900 shadow-sm"
+                  : "text-zinc-500",
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        {scope === "other" && (
+          <p className="text-xs text-zinc-500">
+            These items aren't set up for ordering on your account yet. Add them
+            to an enquiry and Pacific will quote you.
+          </p>
+        )}
+
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <Input
@@ -103,7 +138,9 @@ function CatalogPage() {
               <p className="py-10 text-center text-sm text-zinc-500">
                 {query
                   ? "No items match that search or code."
-                  : "No items in your catalog yet."}
+                  : scope === "assigned"
+                    ? "No items in your catalogue yet."
+                    : "No other items to show."}
               </p>
             )}
           </div>
@@ -150,7 +187,6 @@ function ItemCard({
     designAttribute1?: string | null;
     designAttribute2?: string | null;
     dealerCode: string | null;
-    price: number | null;
     stockQty: number;
     status: string;
     images: ProductImage[];
@@ -193,9 +229,6 @@ function ItemCard({
           )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className="text-sm font-semibold text-zinc-900">
-            {formatCurrency(item.price)}
-          </span>
           <Badge tone={item.stockQty > 0 ? "success" : "danger"}>
             {item.stockQty > 0 ? `${item.stockQty} in stock` : "Out of stock"}
           </Badge>

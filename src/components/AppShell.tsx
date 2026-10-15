@@ -1,6 +1,13 @@
 import * as React from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Store, MessageSquareText, Package, CircleUser } from "lucide-react";
+import {
+  Store,
+  MessageSquareText,
+  FileText,
+  Package,
+  Receipt,
+  CircleUser,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
@@ -8,7 +15,9 @@ import { Spinner } from "@/components/ui/spinner";
 const NAV_ITEMS = [
   { to: "/catalog", label: "Catalog", icon: Store },
   { to: "/inquiries", label: "Enquiries", icon: MessageSquareText },
+  { to: "/quotations", label: "Quotes", icon: FileText },
   { to: "/orders", label: "Orders", icon: Package },
+  { to: "/invoices", label: "Invoices", icon: Receipt },
   { to: "/profile", label: "Profile", icon: CircleUser },
 ] as const;
 

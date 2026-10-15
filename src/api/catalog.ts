@@ -9,6 +9,9 @@ export function getCatalog(params: {
   colourAttribute2?: string | undefined;
   designAttribute1?: string | undefined;
   designAttribute2?: string | undefined;
+  /** "assigned" = your own catalogue (orderable); "other" = every other sellable item
+   * (enquire only). Left out, both. */
+  scope?: "assigned" | "other" | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }): Promise<Paginated<CatalogItem>> {

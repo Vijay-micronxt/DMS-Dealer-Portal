@@ -1,16 +1,13 @@
 import * as React from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, toneForStatus } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { formatDate } from "@/lib/utils";
-import { getMyInquiry, convertToOrder } from "@/api/inquiries";
-import { ApiError } from "@/lib/erp-client";
+import { getMyInquiry } from "@/api/inquiries";
 
 const TERMINAL_STATUSES = new Set(["Converted to Order", "Rejected", "Closed"]);
 
@@ -20,36 +17,10 @@ export const Route = createFileRoute("/inquiries/$id")({
 
 function InquiryDetailPage() {
   const { id } = Route.useParams();
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
   const query = useQuery({
     queryKey: ["inquiry", id],
     queryFn: () => getMyInquiry(id),
-  });
-
-  const [po, setPo] = React.useState("");
-  const [dispatchDate, setDispatchDate] = React.useState("");
-  const [error, setError] = React.useState<string | null>(null);
-
-  const convertMutation = useMutation({
-    mutationFn: () =>
-      convertToOrder({
-        inquiry: id,
-        expected_dispatch: dispatchDate,
-        customer_po: po.trim(),
-      }),
-    onSuccess: (order) => {
-      queryClient.invalidateQueries({ queryKey: ["inquiry", id] });
-      queryClient.invalidateQueries({ queryKey: ["my-orders"] });
-      navigate({ to: "/orders/$id", params: { id: order.id } });
-    },
-    onError: (err) =>
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Could not convert to an order.",
-      ),
   });
 
   if (query.isLoading) {
@@ -73,10 +44,6 @@ function InquiryDetailPage() {
 
   const inquiry = query.data;
   const isOpen = !TERMINAL_STATUSES.has(inquiry.status);
-  // ISS-2026-00644 / 00636 -- convert_to_order refuses an item outside your
-  // assigned catalog and a Custom Style enquiry with no item, so the form is
-  // only shown when it can actually succeed.
-  const canConvert = isOpen && inquiry.orderable;
 
   return (
     <AppShell>
@@ -114,6 +81,14 @@ function InquiryDetailPage() {
                 <dt className="text-zinc-400">Raised on</dt>
                 <dd className="text-zinc-900">{formatDate(inquiry.date)}</dd>
               </div>
+              {inquiry.requestGroup && (
+                <div className="col-span-2">
+                  <dt className="text-zinc-400">Sent together with</dt>
+                  <dd className="text-zinc-900">
+                    Enquiry group {inquiry.requestGroup}
+                  </dd>
+                </div>
+              )}
               {inquiry.customerPo && (
                 <div>
                   <dt className="text-zinc-400">PO number</dt>
@@ -130,53 +105,37 @@ function InquiryDetailPage() {
           </CardContent>
         </Card>
 
-        {isOpen && !inquiry.orderable && (
+        {/* An enquiry becomes an order only through a quotation the dealer accepts --
+            there is no direct "convert to order" here any more. */}
+        {inquiry.linkedQuotation ? (
           <Card>
-            <CardContent>
+            <CardContent className="space-y-2">
               <p className="text-sm text-zinc-700">
-                {inquiry.productId
-                  ? "This item isn't yet set up for ordering on your account — our team will follow up to get it added."
-                  : "This is a custom style request — our team will follow up with you on it."}
+                Pacific has sent you a quotation for this enquiry.
               </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {canConvert && (
-          <Card>
-            <CardContent className="space-y-3">
-              <h2 className="text-sm font-semibold text-zinc-900">
-                Convert to order
-              </h2>
-              <label className="block text-sm font-medium text-zinc-700">
-                Your PO number
-                <Input
-                  value={po}
-                  onChange={(e) => setPo(e.target.value)}
-                  className="mt-1.5"
-                  placeholder="PO-2026-001"
-                />
-              </label>
-              <label className="block text-sm font-medium text-zinc-700">
-                Expected dispatch date
-                <Input
-                  type="date"
-                  value={dispatchDate}
-                  onChange={(e) => setDispatchDate(e.target.value)}
-                  className="mt-1.5"
-                />
-              </label>
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              <Button
-                variant="secondary"
-                onClick={() => convertMutation.mutate()}
-                loading={convertMutation.isPending}
-                disabled={!po.trim() || !dispatchDate}
+              <Link
+                to="/quotations/$id"
+                params={{ id: inquiry.linkedQuotation }}
+                className="block text-center text-sm font-medium text-zinc-900 underline"
               >
-                Convert to order
-              </Button>
+                View quotation {inquiry.linkedQuotation}
+              </Link>
             </CardContent>
           </Card>
+        ) : (
+          isOpen && (
+            <Card>
+              <CardContent>
+                <p className="text-sm text-zinc-700">
+                  {inquiry.productId && !inquiry.orderable
+                    ? "This item isn't yet set up for ordering on your account — our team will follow up to get it added and quote you."
+                    : inquiry.productId
+                      ? "Pacific will send you a quotation with the price. Accept it there to place the order."
+                      : "This is a custom style request — our team will follow up with you on it."}
+                </p>
+              </CardContent>
+            </Card>
+          )
         )}
       </div>
     </AppShell>

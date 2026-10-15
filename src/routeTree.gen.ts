@@ -10,18 +10,28 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EnquiryRouteImport } from './routes/enquiry'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as CatalogIndexRouteImport } from './routes/catalog.index'
 import { Route as CatalogItemRouteImport } from './routes/catalog.$item'
 import { Route as InquiriesIndexRouteImport } from './routes/inquiries.index'
 import { Route as InquiriesIdRouteImport } from './routes/inquiries.$id'
+import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
+import { Route as InvoicesIdRouteImport } from './routes/invoices.$id'
 import { Route as OrdersIndexRouteImport } from './routes/orders.index'
 import { Route as OrdersIdRouteImport } from './routes/orders.$id'
+import { Route as QuotationsIndexRouteImport } from './routes/quotations.index'
+import { Route as QuotationsIdRouteImport } from './routes/quotations.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EnquiryRoute = EnquiryRouteImport.update({
+  id: '/enquiry',
+  path: '/enquiry',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -54,6 +64,16 @@ const InquiriesIdRoute = InquiriesIdRouteImport.update({
   path: '/inquiries/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvoicesIndexRoute = InvoicesIndexRouteImport.update({
+  id: '/invoices/',
+  path: '/invoices/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicesIdRoute = InvoicesIdRouteImport.update({
+  id: '/invoices/$id',
+  path: '/invoices/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OrdersIndexRoute = OrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
@@ -64,87 +84,132 @@ const OrdersIdRoute = OrdersIdRouteImport.update({
   path: '/orders/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QuotationsIndexRoute = QuotationsIndexRouteImport.update({
+  id: '/quotations/',
+  path: '/quotations/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuotationsIdRoute = QuotationsIdRouteImport.update({
+  id: '/quotations/$id',
+  path: '/quotations/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/enquiry': typeof EnquiryRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/catalog/$item': typeof CatalogItemRoute
   '/inquiries/$id': typeof InquiriesIdRoute
+  '/invoices/$id': typeof InvoicesIdRoute
   '/orders/$id': typeof OrdersIdRoute
+  '/quotations/$id': typeof QuotationsIdRoute
   '/catalog/': typeof CatalogIndexRoute
   '/inquiries/': typeof InquiriesIndexRoute
+  '/invoices/': typeof InvoicesIndexRoute
   '/orders/': typeof OrdersIndexRoute
+  '/quotations/': typeof QuotationsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/enquiry': typeof EnquiryRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/catalog/$item': typeof CatalogItemRoute
   '/inquiries/$id': typeof InquiriesIdRoute
+  '/invoices/$id': typeof InvoicesIdRoute
   '/orders/$id': typeof OrdersIdRoute
+  '/quotations/$id': typeof QuotationsIdRoute
   '/catalog': typeof CatalogIndexRoute
   '/inquiries': typeof InquiriesIndexRoute
+  '/invoices': typeof InvoicesIndexRoute
   '/orders': typeof OrdersIndexRoute
+  '/quotations': typeof QuotationsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/enquiry': typeof EnquiryRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/catalog/$item': typeof CatalogItemRoute
   '/inquiries/$id': typeof InquiriesIdRoute
+  '/invoices/$id': typeof InvoicesIdRoute
   '/orders/$id': typeof OrdersIdRoute
+  '/quotations/$id': typeof QuotationsIdRoute
   '/catalog/': typeof CatalogIndexRoute
   '/inquiries/': typeof InquiriesIndexRoute
+  '/invoices/': typeof InvoicesIndexRoute
   '/orders/': typeof OrdersIndexRoute
+  '/quotations/': typeof QuotationsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/enquiry'
     | '/login'
     | '/profile'
     | '/catalog/$item'
     | '/inquiries/$id'
+    | '/invoices/$id'
     | '/orders/$id'
+    | '/quotations/$id'
     | '/catalog/'
     | '/inquiries/'
+    | '/invoices/'
     | '/orders/'
+    | '/quotations/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/enquiry'
     | '/login'
     | '/profile'
     | '/catalog/$item'
     | '/inquiries/$id'
+    | '/invoices/$id'
     | '/orders/$id'
+    | '/quotations/$id'
     | '/catalog'
     | '/inquiries'
+    | '/invoices'
     | '/orders'
+    | '/quotations'
   id:
     | '__root__'
     | '/'
+    | '/enquiry'
     | '/login'
     | '/profile'
     | '/catalog/$item'
     | '/inquiries/$id'
+    | '/invoices/$id'
     | '/orders/$id'
+    | '/quotations/$id'
     | '/catalog/'
     | '/inquiries/'
+    | '/invoices/'
     | '/orders/'
+    | '/quotations/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EnquiryRoute: typeof EnquiryRoute
   LoginRoute: typeof LoginRoute
   ProfileRoute: typeof ProfileRoute
   CatalogItemRoute: typeof CatalogItemRoute
   InquiriesIdRoute: typeof InquiriesIdRoute
+  InvoicesIdRoute: typeof InvoicesIdRoute
   OrdersIdRoute: typeof OrdersIdRoute
+  QuotationsIdRoute: typeof QuotationsIdRoute
   CatalogIndexRoute: typeof CatalogIndexRoute
   InquiriesIndexRoute: typeof InquiriesIndexRoute
+  InvoicesIndexRoute: typeof InvoicesIndexRoute
   OrdersIndexRoute: typeof OrdersIndexRoute
+  QuotationsIndexRoute: typeof QuotationsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -154,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/enquiry': {
+      id: '/enquiry'
+      path: '/enquiry'
+      fullPath: '/enquiry'
+      preLoaderRoute: typeof EnquiryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -198,6 +270,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InquiriesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invoices/': {
+      id: '/invoices/'
+      path: '/invoices'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof InvoicesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoices/$id': {
+      id: '/invoices/$id'
+      path: '/invoices/$id'
+      fullPath: '/invoices/$id'
+      preLoaderRoute: typeof InvoicesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/orders/': {
       id: '/orders/'
       path: '/orders'
@@ -212,19 +298,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrdersIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/quotations/': {
+      id: '/quotations/'
+      path: '/quotations'
+      fullPath: '/quotations/'
+      preLoaderRoute: typeof QuotationsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quotations/$id': {
+      id: '/quotations/$id'
+      path: '/quotations/$id'
+      fullPath: '/quotations/$id'
+      preLoaderRoute: typeof QuotationsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EnquiryRoute: EnquiryRoute,
   LoginRoute: LoginRoute,
   ProfileRoute: ProfileRoute,
   CatalogItemRoute: CatalogItemRoute,
   InquiriesIdRoute: InquiriesIdRoute,
+  InvoicesIdRoute: InvoicesIdRoute,
   OrdersIdRoute: OrdersIdRoute,
+  QuotationsIdRoute: QuotationsIdRoute,
   CatalogIndexRoute: CatalogIndexRoute,
   InquiriesIndexRoute: InquiriesIndexRoute,
+  InvoicesIndexRoute: InvoicesIndexRoute,
   OrdersIndexRoute: OrdersIndexRoute,
+  QuotationsIndexRoute: QuotationsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
