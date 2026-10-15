@@ -72,7 +72,11 @@ function InquiryDetailPage() {
   }
 
   const inquiry = query.data;
-  const canConvert = !TERMINAL_STATUSES.has(inquiry.status);
+  const isOpen = !TERMINAL_STATUSES.has(inquiry.status);
+  // ISS-2026-00644 / 00636 -- convert_to_order refuses an item outside your
+  // assigned catalog and a Custom Style enquiry with no item, so the form is
+  // only shown when it can actually succeed.
+  const canConvert = isOpen && inquiry.orderable;
 
   return (
     <AppShell>
@@ -91,7 +95,10 @@ function InquiryDetailPage() {
                 <h1 className="text-lg font-semibold text-zinc-900">
                   {inquiry.number}
                 </h1>
-                <p className="text-sm text-zinc-500">{inquiry.productId}</p>
+                <p className="text-sm text-zinc-500">
+                  {inquiry.productId ??
+                    `Custom style: ${inquiry.requestedStyle ?? "—"}`}
+                </p>
               </div>
               <Badge tone={toneForStatus(inquiry.status)}>
                 {inquiry.status}
@@ -122,6 +129,18 @@ function InquiryDetailPage() {
             </dl>
           </CardContent>
         </Card>
+
+        {isOpen && !inquiry.orderable && (
+          <Card>
+            <CardContent>
+              <p className="text-sm text-zinc-700">
+                {inquiry.productId
+                  ? "This item isn't yet set up for ordering on your account — our team will follow up to get it added."
+                  : "This is a custom style request — our team will follow up with you on it."}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {canConvert && (
           <Card>
