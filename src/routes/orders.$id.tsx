@@ -201,15 +201,39 @@ function OrderDetailPage() {
                     <p className="text-xs text-zinc-500">{line.qty} boxes</p>
                   </div>
                   <p className="font-medium text-zinc-900">
-                    {formatCurrency(line.rate * line.qty)}
+                    {formatCurrency(line.amount ?? line.rate * line.qty)}
                   </p>
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between border-t border-zinc-200 pt-2 text-sm font-semibold">
-              <span>Total</span>
-              <span>{formatCurrency(order.total)}</span>
-            </div>
+            <dl className="space-y-1.5 border-t border-zinc-200 pt-2 text-sm">
+              {order.netTotal !== undefined && (
+                <div className="flex justify-between text-zinc-600">
+                  <dt>Items total</dt>
+                  <dd className="tabular-nums text-zinc-900">
+                    {formatCurrency(order.netTotal)}
+                  </dd>
+                </div>
+              )}
+              {(order.taxes ?? []).map((t, i) => (
+                <div
+                  key={`${t.description}-${i}`}
+                  className="flex justify-between text-zinc-600"
+                >
+                  <dt>
+                    {t.description}
+                    {t.rate ? ` (${t.rate}%)` : ""}
+                  </dt>
+                  <dd className="tabular-nums text-zinc-900">
+                    {formatCurrency(t.amount)}
+                  </dd>
+                </div>
+              ))}
+              <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold text-zinc-900">
+                <dt>Total</dt>
+                <dd className="tabular-nums">{formatCurrency(order.total)}</dd>
+              </div>
+            </dl>
           </CardContent>
         </Card>
 

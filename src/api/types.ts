@@ -56,6 +56,8 @@ export type CatalogItem = {
    * this is what actually distinguishes an orderable item from one that can only be
    * enquired on (raiseInquiry still works either way; convertToOrder doesn't). */
   orderable: boolean;
+  /** Only on suggestAlternatives results: the alternative Pacific staff chose for the item. */
+  isRecommended?: boolean;
 };
 
 export type Inquiry = {
@@ -65,6 +67,8 @@ export type Inquiry = {
   dealerId: string;
   /** null for a Custom Style enquiry (ISS-2026-00636) -- see requestedStyle. */
   productId: string | null;
+  /** The item's name, when it has one different from its code. */
+  productName?: string | null;
   /** ISS-2026-00636 -- the style name typed through WhatsApp's "Custom Style"
    * option, when the enquiry has no catalog item; null otherwise. */
   requestedStyle: string | null;
@@ -89,6 +93,24 @@ export type Inquiry = {
   linkedQuotation: string | null;
   /** Only present on the response to raise_inquiry -- a recent open duplicate's id, if any. */
   duplicateOf?: string | null;
+};
+
+/** One enquiry as the dealer made it. Items sent together from the enquiry list are ONE enquiry
+ * holding all of them (each still its own record on Pacific's side, which is why `items` carries a
+ * status per item). A lone item is an enquiry of one. */
+export type Enquiry = {
+  /** The group id for items sent together, or the item's own enquiry number. */
+  id: string;
+  number: string;
+  date: string;
+  createdAt: string;
+  /** The shared status, or "Mixed" when the items are in different states. */
+  status: string;
+  itemCount: number;
+  remarks: string | null;
+  /** Quotations Pacific prepared for this enquiry's items (usually one). */
+  linkedQuotations: string[];
+  items: Inquiry[];
 };
 
 export type QuotationLine = {
@@ -173,6 +195,8 @@ export type OrderLine = {
   itemCode: string;
   qty: number;
   rate: number;
+  /** After any line discount -- what this line actually costs. rate × qty ignores the discount. */
+  amount?: number;
   weightPerBoxKg: number | null;
   totalWeightKg: number | null;
 };
@@ -193,6 +217,12 @@ export type Order = {
   sourceRef: string;
   channel: string;
   lines: OrderLine[];
+  /** Items total before tax. */
+  netTotal?: number;
+  /** GST and any other charges on the order (rate is 0 where the amount is fixed). */
+  taxes?: { description: string; rate: number; amount: number }[];
+  totalTaxesAndCharges?: number;
+  /** Items + tax: what the order comes to. */
   total: number;
   stage: string;
   customerPo: string | null;

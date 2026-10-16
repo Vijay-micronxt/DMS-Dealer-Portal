@@ -58,8 +58,9 @@ function ItemDetailPage() {
   const alternativesQuery = useQuery({
     queryKey: ["alternatives", itemCode],
     queryFn: () => suggestAlternatives(itemCode),
-    enabled:
-      !!raisedInquiry && !!itemQuery.data && itemQuery.data.stockQty <= 0,
+    // As soon as the item is out of stock -- not only after an enquiry -- so the dealer is shown
+    // something they can order instead (Pacific's own pick first) while they're looking at it.
+    enabled: !!itemQuery.data && itemQuery.data.stockQty <= 0,
   });
 
   if (itemQuery.isLoading) {
@@ -131,11 +132,41 @@ function ItemDetailPage() {
                 <dd className="text-zinc-900">{item.piecesPerBox ?? "—"}</dd>
               </div>
               <div>
+                <dt className="text-zinc-400">Coverage / box</dt>
+                <dd className="text-zinc-900">
+                  {item.sqftPerBox ? `${item.sqftPerBox} sq ft` : "—"}
+                </dd>
+              </div>
+              <div>
                 <dt className="text-zinc-400">Weight / box</dt>
                 <dd className="text-zinc-900">
                   {item.weightPerBoxKg ? `${item.weightPerBoxKg} kg` : "—"}
                 </dd>
               </div>
+              <div>
+                <dt className="text-zinc-400">Category</dt>
+                <dd className="text-zinc-900">{item.category || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-zinc-400">Colour</dt>
+                <dd className="text-zinc-900">{item.color || "—"}</dd>
+              </div>
+              {/* The four colour/design descriptors (ISS-2026-00632): only the ones this item has. */}
+              {(
+                [
+                  ["Colour attribute 1", item.colourAttribute1],
+                  ["Colour attribute 2", item.colourAttribute2],
+                  ["Design attribute 1", item.designAttribute1],
+                  ["Design attribute 2", item.designAttribute2],
+                ] as const
+              )
+                .filter(([, value]) => !!value)
+                .map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-zinc-400">{label}</dt>
+                    <dd className="text-zinc-900">{value}</dd>
+                  </div>
+                ))}
             </dl>
 
             {item.topBatches.length > 0 && (
@@ -224,6 +255,47 @@ function ItemDetailPage() {
           </Card>
         )}
 
+        {!inStock &&
+          alternativesQuery.data &&
+          alternativesQuery.data.length > 0 && (
+            <Card>
+              <CardContent className="space-y-2">
+                <h2 className="text-sm font-semibold text-zinc-900">
+                  Out of stock — you might also like
+                </h2>
+                <div className="space-y-2">
+                  {alternativesQuery.data.map((alt) => (
+                    <Link
+                      key={alt.id}
+                      to="/catalog/$item"
+                      params={{ item: alt.code }}
+                    >
+                      <div className="flex items-center gap-2.5 rounded-lg border border-zinc-200 px-3 py-2 text-sm">
+                        <ItemThumbnail
+                          images={alt.images}
+                          className="h-9 w-9"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-zinc-800">
+                            {alt.name}
+                          </span>
+                          {alt.isRecommended && (
+                            <span className="text-xs font-medium text-emerald-700">
+                              Recommended by Pacific
+                            </span>
+                          )}
+                        </span>
+                        <Badge tone={alt.stockQty > 0 ? "success" : "danger"}>
+                          {alt.stockQty > 0 ? "In stock" : "Out of stock"}
+                        </Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
         {raisedInquiry && inStock && (
           <Card>
             <CardContent className="space-y-2">
@@ -251,35 +323,6 @@ function ItemDetailPage() {
                 Your enquiry <strong>{raisedInquiry.number}</strong> has been
                 logged. We'll notify you once it's back in stock.
               </p>
-              {alternativesQuery.data && alternativesQuery.data.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-medium text-zinc-400">
-                    You might also like
-                  </p>
-                  <div className="space-y-2">
-                    {alternativesQuery.data.map((alt) => (
-                      <Link
-                        key={alt.id}
-                        to="/catalog/$item"
-                        params={{ item: alt.code }}
-                      >
-                        <div className="flex items-center gap-2.5 rounded-lg border border-zinc-200 px-3 py-2 text-sm">
-                          <ItemThumbnail
-                            images={alt.images}
-                            className="h-9 w-9"
-                          />
-                          <span className="flex-1 truncate text-zinc-800">
-                            {alt.name}
-                          </span>
-                          <Badge tone={alt.stockQty > 0 ? "success" : "danger"}>
-                            {alt.stockQty > 0 ? "In stock" : "Out of stock"}
-                          </Badge>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
               <Link
                 to="/inquiries"
                 className="block text-center text-sm font-medium text-zinc-900 underline"
