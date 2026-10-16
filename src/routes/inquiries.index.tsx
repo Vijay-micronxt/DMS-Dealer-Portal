@@ -6,7 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, toneForStatus } from "@/components/ui/badge";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { cn, formatDate } from "@/lib/utils";
-import { listMyInquiries } from "@/api/inquiries";
+import { listMyEnquiries } from "@/api/inquiries";
+import { itemLabel } from "@/lib/item-label";
 
 const FILTERS = [
   "All",
@@ -24,10 +25,12 @@ export const Route = createFileRoute("/inquiries/")({
 function InquiriesPage() {
   const [status, setStatus] = React.useState<(typeof FILTERS)[number]>("All");
 
+  // One entry per enquiry the dealer made: items sent together from the enquiry list arrive as a
+  // single enquiry holding all of them, not one card per item.
   const query = useQuery({
     queryKey: ["my-inquiries", status],
     queryFn: () =>
-      listMyInquiries({
+      listMyEnquiries({
         status: status === "All" ? undefined : status,
         limit: 50,
       }),
@@ -69,32 +72,44 @@ function InquiriesPage() {
         )}
 
         <div className="space-y-3">
-          {query.data?.items.map((inquiry) => (
-            <Link
-              key={inquiry.id}
-              to="/inquiries/$id"
-              params={{ id: inquiry.id }}
-            >
-              <Card className="transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-zinc-900">
-                      {inquiry.productId ?? inquiry.requestedStyle}
-                    </p>
-                    {!inquiry.productId && (
-                      <p className="text-xs text-zinc-500">Custom style</p>
-                    )}
-                    <p className="text-xs text-zinc-500">
-                      {inquiry.qty} boxes · {formatDate(inquiry.date)}
-                    </p>
-                  </div>
-                  <Badge tone={toneForStatus(inquiry.status)}>
-                    {inquiry.status}
-                  </Badge>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+          {query.data?.items.map((enquiry) => {
+            const shown = enquiry.items.slice(0, 2).map(itemLabel);
+            const more = enquiry.itemCount - shown.length;
+            return (
+              <Link
+                key={enquiry.id}
+                to="/inquiries/$id"
+                params={{ id: enquiry.id }}
+              >
+                <Card className="transition-shadow hover:shadow-md">
+                  <CardContent className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-900">
+                        {enquiry.itemCount === 1
+                          ? shown[0]
+                          : `${enquiry.itemCount} items`}
+                      </p>
+                      {enquiry.itemCount > 1 && (
+                        <p className="truncate text-xs text-zinc-500">
+                          {shown.join(", ")}
+                          {more > 0 ? ` +${more} more` : ""}
+                        </p>
+                      )}
+                      <p className="text-xs text-zinc-500">
+                        {enquiry.number} · {formatDate(enquiry.date)}
+                        {enquiry.itemCount === 1
+                          ? ` · ${enquiry.items[0]?.qty} boxes`
+                          : ""}
+                      </p>
+                    </div>
+                    <Badge tone={toneForStatus(enquiry.status)}>
+                      {enquiry.status}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </AppShell>

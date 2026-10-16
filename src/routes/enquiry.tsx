@@ -1,13 +1,16 @@
 import * as React from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/erp-client";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { getCatalog, resolveCode } from "@/api/catalog";
 import {
+  addToEnquiryList,
   clearEnquiryList,
   removeFromEnquiryList,
   setEnquiryQty,
@@ -27,6 +30,7 @@ function EnquiryListPage() {
   const queryClient = useQueryClient();
   const [remarks, setRemarks] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [adding, setAdding] = React.useState(false);
 
   const sendMutation = useMutation({
     mutationFn: () =>
@@ -59,10 +63,12 @@ function EnquiryListPage() {
         <h1 className="text-lg font-semibold text-zinc-900">Enquiry list</h1>
 
         {lines.length === 0 ? (
-          <p className="py-10 text-center text-sm text-zinc-500">
-            Your enquiry list is empty. Open an item in the catalog and choose
-            “Add to enquiry list”.
-          </p>
+          <>
+            <p className="pt-6 text-center text-sm text-zinc-500">
+              Your enquiry list is empty. Add the items you want to ask about.
+            </p>
+            <AddItem adding={adding} setAdding={setAdding} />
+          </>
         ) : (
           <>
             <div className="space-y-3">
@@ -100,6 +106,8 @@ function EnquiryListPage() {
               ))}
             </div>
 
+            <AddItem adding={adding} setAdding={setAdding} />
+
             <label className="block text-sm font-medium text-zinc-700">
               Remarks (optional)
               <Input
@@ -124,5 +132,133 @@ function EnquiryListPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+/** "Add item": a search box that finds items by name or code and adds them to the enquiry list in
+ * one tap, so the dealer doesn't have to go back to the catalogue for each one. Quantities are
+ * edited in the list above, where they can also be changed after adding. */
+function AddItem({
+  adding,
+  setAdding,
+}: {
+  adding: boolean;
+  setAdding: (v: boolean) => void;
+}) {
+  const lines = useEnquiryList();
+  const [query, setQuery] = React.useState("");
+  const debounced = useDebouncedValue(query.trim(), 300);
+  const enabled = debounced.length >= 2;
+
+  const results = useQuery({
+    queryKey: ["enquiry-add-search", debounced],
+    queryFn: () => getCatalog({ search: debounced, limit: 8 }),
+    enabled: adding && enabled,
+  });
+  // An exact item code (the dealer's own or the company's) isn't part of the name search.
+  const byCode = useQuery({
+    queryKey: ["enquiry-add-code", debounced],
+    queryFn: () => resolveCode(debounced),
+    enabled:
+      adding && enabled && results.isSuccess && results.data.items.length === 0,
+  });
+
+  const found =
+    results.data && results.data.items.length > 0
+      ? results.data.items
+      : byCode.data
+        ? [byCode.data]
+        : [];
+  const inList = new Set(lines.map((l) => l.code));
+
+  if (!adding) {
+    return (
+      <Button variant="outline" onClick={() => setAdding(true)}>
+        <Plus className="h-4 w-4" /> Add item
+      </Button>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-900">Add an item</h2>
+          <button
+            onClick={() => {
+              setAdding(false);
+              setQuery("");
+            }}
+            className="text-sm font-medium text-zinc-500"
+          >
+            Done
+          </button>
+        </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <Input
+            autoFocus
+            placeholder="Search item name or code"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        {!enabled && (
+          <p className="text-xs text-zinc-500">
+            Type at least 2 letters of the name or code.
+          </p>
+        )}
+        {enabled && (results.isLoading || byCode.isLoading) && (
+          <p className="text-xs text-zinc-500">Searching…</p>
+        )}
+        {enabled &&
+          results.isSuccess &&
+          found.length === 0 &&
+          !byCode.isLoading && (
+            <p className="text-xs text-zinc-500">
+              No item matches “{debounced}”.
+            </p>
+          )}
+        <div className="divide-y divide-zinc-100">
+          {found.map((item) => {
+            const added = inList.has(item.code);
+            return (
+              <div
+                key={item.id}
+                className="flex items-center justify-between gap-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-zinc-900">
+                    {item.name}
+                  </p>
+                  <p className="truncate text-xs text-zinc-500">
+                    {item.code}
+                    {[item.size, item.finish].filter(Boolean).length > 0
+                      ? ` · ${[item.size, item.finish].filter(Boolean).join(" / ")}`
+                      : ""}
+                  </p>
+                </div>
+                <Button
+                  variant={added ? "ghost" : "outline"}
+                  size="sm"
+                  className="w-auto shrink-0"
+                  disabled={added}
+                  onClick={() =>
+                    addToEnquiryList({
+                      code: item.code,
+                      name: item.name,
+                      qty: 1,
+                    })
+                  }
+                >
+                  {added ? "In list" : "Add"}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

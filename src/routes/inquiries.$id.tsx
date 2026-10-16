@@ -7,20 +7,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, toneForStatus } from "@/components/ui/badge";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { formatDate } from "@/lib/utils";
-import { getMyInquiry } from "@/api/inquiries";
+import { itemLabel } from "@/lib/item-label";
+import { getMyEnquiry } from "@/api/inquiries";
 
 const TERMINAL_STATUSES = new Set(["Converted to Order", "Rejected", "Closed"]);
 
 export const Route = createFileRoute("/inquiries/$id")({
-  component: InquiryDetailPage,
+  component: EnquiryDetailPage,
 });
 
-function InquiryDetailPage() {
+/** One enquiry and everything in it: the items the dealer asked about together, each with its own
+ * quantity and status, and the quotation(s) Pacific prepared. */
+function EnquiryDetailPage() {
   const { id } = Route.useParams();
 
   const query = useQuery({
     queryKey: ["inquiry", id],
-    queryFn: () => getMyInquiry(id),
+    queryFn: () => getMyEnquiry(id),
   });
 
   if (query.isLoading) {
@@ -42,8 +45,12 @@ function InquiryDetailPage() {
     );
   }
 
-  const inquiry = query.data;
-  const isOpen = !TERMINAL_STATUSES.has(inquiry.status);
+  const enquiry = query.data;
+  const waiting = enquiry.items.filter(
+    (i) => !i.linkedQuotation && !TERMINAL_STATUSES.has(i.status),
+  );
+  // Items Pacific can't quote for ordering yet: outside the dealer's catalogue, or a custom style.
+  const notOrderable = waiting.filter((i) => !i.orderable);
 
   return (
     <AppShell>
@@ -60,82 +67,95 @@ function InquiryDetailPage() {
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-lg font-semibold text-zinc-900">
-                  {inquiry.number}
+                  {enquiry.number}
                 </h1>
                 <p className="text-sm text-zinc-500">
-                  {inquiry.productId ??
-                    `Custom style: ${inquiry.requestedStyle ?? "—"}`}
+                  {enquiry.itemCount === 1
+                    ? "1 item"
+                    : `${enquiry.itemCount} items`}{" "}
+                  · {formatDate(enquiry.date)}
                 </p>
               </div>
-              <Badge tone={toneForStatus(inquiry.status)}>
-                {inquiry.status}
+              <Badge tone={toneForStatus(enquiry.status)}>
+                {enquiry.status}
               </Badge>
             </div>
+            {enquiry.remarks && (
+              <div className="text-sm">
+                <p className="text-zinc-400">Remarks</p>
+                <p className="text-zinc-900">{enquiry.remarks}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <dt className="text-zinc-400">Quantity</dt>
-                <dd className="text-zinc-900">{inquiry.qty} boxes</dd>
-              </div>
-              <div>
-                <dt className="text-zinc-400">Raised on</dt>
-                <dd className="text-zinc-900">{formatDate(inquiry.date)}</dd>
-              </div>
-              {inquiry.requestGroup && (
-                <div className="col-span-2">
-                  <dt className="text-zinc-400">Sent together with</dt>
-                  <dd className="text-zinc-900">
-                    Enquiry group {inquiry.requestGroup}
-                  </dd>
+        <Card>
+          <CardContent className="space-y-2">
+            <h2 className="text-sm font-semibold text-zinc-900">Items</h2>
+            <div className="divide-y divide-zinc-100">
+              {enquiry.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between gap-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-zinc-900">
+                      {itemLabel(item)}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {item.productId && item.productId !== itemLabel(item)
+                        ? `${item.productId} · `
+                        : ""}
+                      {item.qty} boxes
+                      {!item.productId ? " · Custom style" : ""}
+                    </p>
+                    {item.customerPo && (
+                      <p className="text-xs text-zinc-500">
+                        PO {item.customerPo}
+                      </p>
+                    )}
+                  </div>
+                  <Badge tone={toneForStatus(item.status)}>{item.status}</Badge>
                 </div>
-              )}
-              {inquiry.customerPo && (
-                <div>
-                  <dt className="text-zinc-400">PO number</dt>
-                  <dd className="text-zinc-900">{inquiry.customerPo}</dd>
-                </div>
-              )}
-              {inquiry.remarks && (
-                <div className="col-span-2">
-                  <dt className="text-zinc-400">Remarks</dt>
-                  <dd className="text-zinc-900">{inquiry.remarks}</dd>
-                </div>
-              )}
-            </dl>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
         {/* An enquiry becomes an order only through a quotation the dealer accepts --
-            there is no direct "convert to order" here any more. */}
-        {inquiry.linkedQuotation ? (
+            there is no direct "convert to order" here. */}
+        {enquiry.linkedQuotations.length > 0 && (
           <Card>
             <CardContent className="space-y-2">
               <p className="text-sm text-zinc-700">
                 Pacific has sent you a quotation for this enquiry.
               </p>
-              <Link
-                to="/quotations/$id"
-                params={{ id: inquiry.linkedQuotation }}
-                className="block text-center text-sm font-medium text-zinc-900 underline"
-              >
-                View quotation {inquiry.linkedQuotation}
-              </Link>
+              {enquiry.linkedQuotations.map((q) => (
+                <Link
+                  key={q}
+                  to="/quotations/$id"
+                  params={{ id: q }}
+                  className="block text-center text-sm font-medium text-zinc-900 underline"
+                >
+                  View quotation {q}
+                </Link>
+              ))}
             </CardContent>
           </Card>
-        ) : (
-          isOpen && (
-            <Card>
-              <CardContent>
-                <p className="text-sm text-zinc-700">
-                  {inquiry.productId && !inquiry.orderable
-                    ? "This item isn't yet set up for ordering on your account — our team will follow up to get it added and quote you."
-                    : inquiry.productId
-                      ? "Pacific will send you a quotation with the price. Accept it there to place the order."
-                      : "This is a custom style request — our team will follow up with you on it."}
-                </p>
-              </CardContent>
-            </Card>
-          )
+        )}
+
+        {waiting.length > 0 && (
+          <Card>
+            <CardContent>
+              <p className="text-sm text-zinc-700">
+                {notOrderable.length === waiting.length
+                  ? "These items aren't yet set up for ordering on your account — our team will follow up to get them added and quote you."
+                  : notOrderable.length > 0
+                    ? "Pacific will send you a quotation with the prices. Some items here aren't yet set up for ordering on your account — our team will follow up on those."
+                    : "Pacific will send you a quotation with the prices. Accept it there to place the order."}
+              </p>
+            </CardContent>
+          </Card>
         )}
       </div>
     </AppShell>

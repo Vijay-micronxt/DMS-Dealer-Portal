@@ -1,5 +1,5 @@
 import { authedCall } from "@/lib/auth";
-import type { Inquiry, Paginated } from "@/api/types";
+import type { Enquiry, Inquiry, Paginated } from "@/api/types";
 
 export function raiseInquiry(params: {
   item: string;
@@ -41,5 +41,25 @@ export function getMyInquiry(inquiry: string): Promise<Inquiry> {
   return authedCall("dms_erp.sales.dealer_portal_api.get_my_inquiry", {
     method: "GET",
     params: { inquiry },
+  });
+}
+
+/** The dealer's enquiries, one entry per enquiry made -- items sent together arrive as one. */
+export function listMyEnquiries(params: {
+  status?: string | undefined;
+  search?: string | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}): Promise<Paginated<Enquiry>> {
+  return authedCall("dms_erp.sales.dealer_portal_api.list_my_enquiries", {
+    method: "GET",
+    params,
+  });
+}
+
+export function getMyEnquiry(enquiry: string): Promise<Enquiry> {
+  return authedCall("dms_erp.sales.dealer_portal_api.get_my_enquiry", {
+    method: "GET",
+    params: { enquiry },
   });
 }
