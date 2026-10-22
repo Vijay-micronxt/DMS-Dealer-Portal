@@ -189,14 +189,6 @@ export async function verifyOtp(
       params: { phone, otp, device_id: deviceId() },
     },
   );
-  const user = startSession(res);
-  // Every OTP sign-in re-offers the email + password setup until the dealer has a password
-  // (Pacific's ask, Oct 2026) -- see components/SetCredentialsPrompt.tsx.
-  markCredentialsPromptDue();
-  return user;
-}
-
-function startSession(res: TokenResponse): DealerUser {
   const user = mapBackendUser(res.user);
   persistSession(
     {
@@ -206,23 +198,10 @@ function startSession(res: TokenResponse): DealerUser {
     },
     user,
   );
+  // Every OTP sign-in re-offers the email + password setup until the dealer has a password
+  // (Pacific's ask, Oct 2026) -- see components/SetCredentialsPrompt.tsx.
+  markCredentialsPromptDue();
   return user;
-}
-
-/** The second way in (BRD C.13), for a dealer who has set an email + password after an
- * earlier OTP sign-in. Same session shape as verifyOtp. */
-export async function loginWithPassword(
-  email: string,
-  password: string,
-): Promise<DealerUser> {
-  const res = await callMethod<TokenResponse>(
-    "dms_erp.auth.dealer_api.login_with_password",
-    {
-      method: "POST",
-      params: { email, password, device_id: deviceId() },
-    },
-  );
-  return startSession(res);
 }
 
 const CREDENTIALS_PROMPT_KEY = "dealer.auth.prompt_credentials";
@@ -250,6 +229,43 @@ export function clearCredentialsPrompt() {
   } catch {
     // ignore
   }
+}
+
+/** Second way in, for a dealer who's already set a password (see setMyPassword) --
+ * same generic error regardless of whether the email is unregistered, has never had
+ * a password set, or the password is simply wrong (see backend docstring), so the UI
+ * must show one generic message here, never branch its wording on the failure. */
+export async function loginWithPassword(
+  email: string,
+  password: string,
+): Promise<DealerUser> {
+  const res = await callMethod<TokenResponse>(
+    "dms_erp.auth.dealer_api.login_with_password",
+    {
+      method: "POST",
+      params: { email, password, device_id: deviceId() },
+    },
+  );
+  const user = mapBackendUser(res.user);
+  persistSession(
+    {
+      accessToken: res.access_token,
+      refreshToken: res.refresh_token,
+      expiresAt: Date.now() + res.expires_in * 1000,
+    },
+    user,
+  );
+  return user;
+}
+
+/** Lets an already-signed-in dealer set or change their own password, so
+ * loginWithPassword has something to check next time. Requires an email already
+ * on file (profile.updateMyEmail) -- the backend rejects this otherwise. */
+export async function setMyPassword(password: string): Promise<void> {
+  await authedCall("dms_erp.auth.dealer_api.set_my_password", {
+    method: "POST",
+    params: { password },
+  });
 }
 
 export function signOut() {
@@ -296,6 +312,7 @@ export function useAuth() {
     requestOtp,
     verifyOtp,
     loginWithPassword,
+    setMyPassword,
     signOut,
   };
 }

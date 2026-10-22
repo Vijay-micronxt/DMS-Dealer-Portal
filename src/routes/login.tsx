@@ -20,17 +20,43 @@ function LoginPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
 
-  const [step, setStep] = React.useState<"phone" | "otp" | "password">("phone");
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
+  const [method, setMethod] = React.useState<"otp" | "password">("otp");
+  const [step, setStep] = React.useState<"phone" | "otp">("phone");
   const [phone, setPhone] = React.useState("");
   const [otp, setOtp] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     if (user) navigate({ to: search.redirect ?? "/catalog" });
   }, [user, navigate, search.redirect]);
+
+  function switchMethod(next: "otp" | "password") {
+    setMethod(next);
+    setStep("phone");
+    setError(null);
+  }
+
+  async function handleLoginWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await loginWithPassword(email.trim(), password);
+      navigate({ to: search.redirect ?? "/catalog" });
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Something went wrong. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -70,32 +96,6 @@ function LoginPage() {
     }
   }
 
-  async function handlePasswordLogin(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || !password) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      await loginWithPassword(email.trim(), password);
-      navigate({ to: search.redirect ?? "/catalog" });
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Could not sign in. Please try again.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function switchTo(next: "phone" | "password") {
-    setStep(next);
-    setOtp("");
-    setPassword("");
-    setError(null);
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
       <div className="w-full max-w-sm">
@@ -104,20 +104,47 @@ function LoginPage() {
             Pacific Dealer Portal
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            {step === "password"
-              ? "Sign in with your email and password"
-              : "Sign in with your registered phone number"}
+            {method === "otp"
+              ? "Sign in with your registered phone number"
+              : "Sign in with your email and password"}
           </p>
         </div>
 
-        {step === "password" ? (
-          <form onSubmit={handlePasswordLogin} className="space-y-3">
+        <div className="mb-6 flex rounded-lg border border-zinc-200 bg-white p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => switchMethod("otp")}
+            className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
+              method === "otp"
+                ? "bg-zinc-900 text-white"
+                : "text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            Phone (OTP)
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMethod("password")}
+            className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
+              method === "password"
+                ? "bg-zinc-900 text-white"
+                : "text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            Email &amp; Password
+          </button>
+        </div>
+
+        {method === "password" ? (
+          <form onSubmit={handleLoginWithPassword} className="space-y-3">
             <label className="block text-sm font-medium text-zinc-700">
               Email
               <Input
                 type="email"
-                autoComplete="email"
+                inputMode="email"
                 autoFocus
+                autoComplete="username"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1.5"
@@ -128,6 +155,7 @@ function LoginPage() {
               <Input
                 type="password"
                 autoComplete="current-password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1.5"
@@ -141,13 +169,10 @@ function LoginPage() {
             >
               Sign in
             </Button>
-            <button
-              type="button"
-              className="w-full text-center text-sm text-zinc-500 underline"
-              onClick={() => switchTo("phone")}
-            >
-              Use a WhatsApp code instead
-            </button>
+            <p className="text-center text-xs text-zinc-400">
+              Forgot your password? Switch to Phone (OTP) to sign in, then set a
+              new one from your Profile.
+            </p>
           </form>
         ) : step === "phone" ? (
           <form onSubmit={handleRequestOtp} className="space-y-3">
@@ -167,13 +192,6 @@ function LoginPage() {
             <Button type="submit" loading={submitting} disabled={!phone.trim()}>
               Send code
             </Button>
-            <button
-              type="button"
-              className="w-full text-center text-sm text-zinc-500 underline"
-              onClick={() => switchTo("password")}
-            >
-              Sign in with email &amp; password
-            </button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-3">

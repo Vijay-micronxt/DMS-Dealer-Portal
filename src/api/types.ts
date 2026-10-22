@@ -236,9 +236,12 @@ export type DealerProfile = {
   id: string;
   name: string;
   phone: string | null;
+  /** The dealer portal's second login identifier (see lib/auth's
+   * loginWithPassword) -- null until the dealer sets one themselves. */
   email: string | null;
   classification: string | null;
-  /** Whether this portal account has a password set, i.e. can sign in with email + password. */
+  /** Whether this portal account has a password set -- drives the post-OTP
+   * "set an email + password" prompt (components/SetCredentialsPrompt). */
   hasPassword: boolean;
 };
 

@@ -3,8 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { myProfile, setMyPassword, updateMyEmail } from "@/api/profile";
-import { clearCredentialsPrompt, isCredentialsPromptDue } from "@/lib/auth";
+import { myProfile, updateMyEmail } from "@/api/profile";
+import {
+  clearCredentialsPrompt,
+  isCredentialsPromptDue,
+  setMyPassword,
+} from "@/lib/auth";
 import { ApiError } from "@/lib/erp-client";
 import type { DealerProfile } from "@/api/types";
 
