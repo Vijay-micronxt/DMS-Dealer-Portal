@@ -16,11 +16,13 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { user, requestOtp, verifyOtp } = useAuth();
+  const { user, requestOtp, verifyOtp, loginWithPassword } = useAuth();
   const navigate = useNavigate();
   const search = Route.useSearch();
 
-  const [step, setStep] = React.useState<"phone" | "otp">("phone");
+  const [step, setStep] = React.useState<"phone" | "otp" | "password">("phone");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [otp, setOtp] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -68,6 +70,32 @@ function LoginPage() {
     }
   }
 
+  async function handlePasswordLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await loginWithPassword(email.trim(), password);
+      navigate({ to: search.redirect ?? "/catalog" });
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not sign in. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function switchTo(next: "phone" | "password") {
+    setStep(next);
+    setOtp("");
+    setPassword("");
+    setError(null);
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
       <div className="w-full max-w-sm">
@@ -76,11 +104,52 @@ function LoginPage() {
             Pacific Dealer Portal
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Sign in with your registered phone number
+            {step === "password"
+              ? "Sign in with your email and password"
+              : "Sign in with your registered phone number"}
           </p>
         </div>
 
-        {step === "phone" ? (
+        {step === "password" ? (
+          <form onSubmit={handlePasswordLogin} className="space-y-3">
+            <label className="block text-sm font-medium text-zinc-700">
+              Email
+              <Input
+                type="email"
+                autoComplete="email"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1.5"
+              />
+            </label>
+            <label className="block text-sm font-medium text-zinc-700">
+              Password
+              <Input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1.5"
+              />
+            </label>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button
+              type="submit"
+              loading={submitting}
+              disabled={!email.trim() || !password}
+            >
+              Sign in
+            </Button>
+            <button
+              type="button"
+              className="w-full text-center text-sm text-zinc-500 underline"
+              onClick={() => switchTo("phone")}
+            >
+              Use a WhatsApp code instead
+            </button>
+          </form>
+        ) : step === "phone" ? (
           <form onSubmit={handleRequestOtp} className="space-y-3">
             <label className="block text-sm font-medium text-zinc-700">
               Phone number
@@ -98,6 +167,13 @@ function LoginPage() {
             <Button type="submit" loading={submitting} disabled={!phone.trim()}>
               Send code
             </Button>
+            <button
+              type="button"
+              className="w-full text-center text-sm text-zinc-500 underline"
+              onClick={() => switchTo("password")}
+            >
+              Sign in with email &amp; password
+            </button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-3">

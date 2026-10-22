@@ -236,7 +236,10 @@ export type DealerProfile = {
   id: string;
   name: string;
   phone: string | null;
+  email: string | null;
   classification: string | null;
+  /** Whether this portal account has a password set, i.e. can sign in with email + password. */
+  hasPassword: boolean;
 };
 
 export type DealerDues = {

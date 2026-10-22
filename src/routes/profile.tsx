@@ -1,3 +1,4 @@
+import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
@@ -7,6 +8,7 @@ import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { myProfile, myDues } from "@/api/profile";
+import { CredentialsForm } from "@/components/SetCredentialsPrompt";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
@@ -15,6 +17,7 @@ export const Route = createFileRoute("/profile")({
 function ProfilePage() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const [editingCredentials, setEditingCredentials] = React.useState(false);
 
   const profileQuery = useQuery({
     queryKey: ["my-profile"],
@@ -61,11 +64,46 @@ function ProfilePage() {
               <p className="text-sm text-zinc-900">{profile.phone ?? "—"}</p>
             </div>
             <div>
+              <p className="text-xs text-zinc-400">Email</p>
+              <p className="text-sm text-zinc-900">{profile.email ?? "—"}</p>
+            </div>
+            <div>
               <p className="text-xs text-zinc-400">Classification</p>
               <p className="text-sm text-zinc-900">
                 {profile.classification ?? "—"}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-zinc-900">
+                Email &amp; password sign-in
+              </p>
+              <p className="text-xs text-zinc-500">
+                {profile.hasPassword
+                  ? "Set — you can sign in with your email and password."
+                  : "Not set — you sign in with a WhatsApp code."}
+              </p>
+            </div>
+            {editingCredentials ? (
+              <CredentialsForm
+                profile={profile}
+                onDone={() => setEditingCredentials(false)}
+                onSecondary={() => setEditingCredentials(false)}
+              />
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => setEditingCredentials(true)}
+              >
+                {profile.hasPassword
+                  ? "Change password"
+                  : "Set email & password"}
+              </Button>
+            )}
           </CardContent>
         </Card>
 

@@ -11,6 +11,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
+import { SetCredentialsPrompt } from "@/components/SetCredentialsPrompt";
 
 const NAV_ITEMS = [
   { to: "/catalog", label: "Catalog", icon: Store },
@@ -53,6 +54,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="flex-1 px-4 pb-24 pt-4">{children}</main>
+
+      <SetCredentialsPrompt />
 
       <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-xl border-t border-zinc-200 bg-white">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => {

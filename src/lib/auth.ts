@@ -166,10 +166,10 @@ export async function ensureFreshAccessToken(): Promise<string | null> {
 }
 
 /** Step 1 of login (BRD C.13) -- sends a 6-digit code over WhatsApp to the given phone
- * number if (and only if) it matches a dealer. Always resolves the same way regardless
- * of whether the phone is actually registered -- the backend deliberately never reveals
- * that, so the UI's next step is always "enter the code we sent", never a branch on
- * whether the number was found. */
+ * number if it matches a dealer. A number on no dealer's record is rejected with "This
+ * number isn't registered with Pacific..." (Pacific's choice, Oct 2026 -- see the
+ * backend's request_otp), which the login page shows as the error on the phone step
+ * instead of moving on to "enter the code". */
 export async function requestOtp(phone: string): Promise<void> {
   await callMethod("dms_erp.auth.dealer_api.request_otp", {
     method: "POST",
@@ -189,6 +189,14 @@ export async function verifyOtp(
       params: { phone, otp, device_id: deviceId() },
     },
   );
+  const user = startSession(res);
+  // Every OTP sign-in re-offers the email + password setup until the dealer has a password
+  // (Pacific's ask, Oct 2026) -- see components/SetCredentialsPrompt.tsx.
+  markCredentialsPromptDue();
+  return user;
+}
+
+function startSession(res: TokenResponse): DealerUser {
   const user = mapBackendUser(res.user);
   persistSession(
     {
@@ -201,9 +209,53 @@ export async function verifyOtp(
   return user;
 }
 
+/** The second way in (BRD C.13), for a dealer who has set an email + password after an
+ * earlier OTP sign-in. Same session shape as verifyOtp. */
+export async function loginWithPassword(
+  email: string,
+  password: string,
+): Promise<DealerUser> {
+  const res = await callMethod<TokenResponse>(
+    "dms_erp.auth.dealer_api.login_with_password",
+    {
+      method: "POST",
+      params: { email, password, device_id: deviceId() },
+    },
+  );
+  return startSession(res);
+}
+
+const CREDENTIALS_PROMPT_KEY = "dealer.auth.prompt_credentials";
+
+function markCredentialsPromptDue() {
+  try {
+    sessionStorage.setItem(CREDENTIALS_PROMPT_KEY, "1");
+  } catch {
+    // Storage blocked: the prompt just won't show this time -- never blocks sign-in.
+  }
+}
+
+/** True once per OTP sign-in, until the prompt has been answered (saved or "Later"). */
+export function isCredentialsPromptDue(): boolean {
+  try {
+    return sessionStorage.getItem(CREDENTIALS_PROMPT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function clearCredentialsPrompt() {
+  try {
+    sessionStorage.removeItem(CREDENTIALS_PROMPT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function signOut() {
   // The enquiry list belongs to whoever built it -- never carried into the next login.
   clearEnquiryList();
+  clearCredentialsPrompt();
   hydrate();
   if (tokens) {
     callMethod("dms_erp.auth.api.logout", {
@@ -238,7 +290,14 @@ export function useAuth() {
   );
   const authPending = snapshot === PENDING;
   const user = authPending ? null : snapshot;
-  return { user, authPending, requestOtp, verifyOtp, signOut };
+  return {
+    user,
+    authPending,
+    requestOtp,
+    verifyOtp,
+    loginWithPassword,
+    signOut,
+  };
 }
 
 /** For api/*.ts callers: the current access token, refreshing first if needed. Throws
