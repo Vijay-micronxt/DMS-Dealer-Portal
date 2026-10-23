@@ -204,7 +204,6 @@ export type OrderLine = {
 export type OrderStageEvent = {
   stage: string;
   at: string;
-  by: string;
   note: string | null;
 };
 
@@ -215,7 +214,6 @@ export type Order = {
   dealerId: string;
   sourceType: string;
   sourceRef: string;
-  channel: string;
   lines: OrderLine[];
   /** Items total before tax. */
   netTotal?: number;
@@ -228,7 +226,6 @@ export type Order = {
   customerPo: string | null;
   expectedDispatch: string | null;
   vehicle: string | null;
-  owner: string;
   history: OrderStageEvent[];
 };
 
