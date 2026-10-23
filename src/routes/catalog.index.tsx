@@ -2,6 +2,7 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
+import { formatBoxQty } from "@/lib/stock-format";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -188,6 +189,7 @@ function ItemCard({
     designAttribute2?: string | null;
     dealerCode: string | null;
     stockQty: number;
+    piecesPerBox?: number | null;
     status: string;
     images: ProductImage[];
     orderable: boolean;
@@ -230,7 +232,9 @@ function ItemCard({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <Badge tone={item.stockQty > 0 ? "success" : "danger"}>
-            {item.stockQty > 0 ? `${item.stockQty} in stock` : "Out of stock"}
+            {item.stockQty > 0
+              ? `${formatBoxQty(item.stockQty, item.piecesPerBox)} in stock`
+              : "Out of stock"}
           </Badge>
           {!item.orderable && (
             // ISS-2026-00644 -- this item isn't in your Dealer Catalog assignment yet;

@@ -240,6 +240,9 @@ export type DealerProfile = {
    * loginWithPassword) -- null until the dealer sets one themselves. */
   email: string | null;
   classification: string | null;
+  /** Whether this portal account has a password set -- drives the post-OTP
+   * "set an email + password" prompt (components/SetCredentialsPrompt). */
+  hasPassword: boolean;
 };
 
 export type DealerDues = {

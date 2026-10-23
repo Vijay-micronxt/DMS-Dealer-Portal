@@ -2,6 +2,7 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
+import { formatBoxQty } from "@/lib/stock-format";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -113,7 +114,9 @@ function ItemDetailPage() {
 
             <div className="flex flex-wrap gap-2">
               <Badge tone={inStock ? "success" : "danger"}>
-                {inStock ? `${item.stockQty} boxes in stock` : "Out of stock"}
+                {inStock
+                  ? `${formatBoxQty(item.stockQty, item.piecesPerBox)} in stock`
+                  : "Out of stock"}
               </Badge>
               {item.series && <Badge tone="info">{item.series}</Badge>}
               {!item.isSellable && <Badge tone="neutral">{item.status}</Badge>}
@@ -182,7 +185,7 @@ function ItemDetailPage() {
                     >
                       <span className="text-zinc-600">{b.batchNumber}</span>
                       <span className="font-medium text-zinc-900">
-                        {b.boxes} boxes
+                        {formatBoxQty(b.boxes, item.piecesPerBox)}
                       </span>
                     </div>
                   ))}
