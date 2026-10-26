@@ -1,7 +1,7 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { Download, Search } from "lucide-react";
 import { formatBoxQty } from "@/lib/stock-format";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
-import { getCatalog, resolveCode } from "@/api/catalog";
+import { exportMyCatalog, getCatalog, resolveCode } from "@/api/catalog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { ProductImage } from "@/api/types";
 
@@ -31,6 +31,36 @@ const SECTIONS = [
 
 function CatalogPage() {
   const [scope, setScope] = React.useState<"assigned" | "other">("assigned");
+  const [exporting, setExporting] = React.useState(false);
+  const [exportError, setExportError] = React.useState<string | null>(null);
+
+  async function downloadCatalogue() {
+    setExportError(null);
+    // Opened inside the click so pop-up blockers allow it; filled once the page arrives.
+    const win = window.open("", "_blank");
+    if (!win) {
+      setExportError("Allow pop-ups for this site to open your catalogue.");
+      return;
+    }
+    win.document.write(
+      "<p style='font-family:sans-serif;padding:24px'>Preparing your catalogue…</p>",
+    );
+    setExporting(true);
+    try {
+      const html = await exportMyCatalog();
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+    } catch (err) {
+      win.close();
+      setExportError(
+        err instanceof Error ? err.message : "Couldn't prepare your catalogue.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
   const [query, setQuery] = React.useState("");
   const debounced = useDebouncedValue(query, 300);
   const navigate = Route.useNavigate();
@@ -79,6 +109,22 @@ function CatalogPage() {
     <AppShell>
       <div className="space-y-4">
         <EnquiryListLink />
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500">
+            Save your catalogue as a PDF or share it on WhatsApp.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exporting}
+            onClick={() => void downloadCatalogue()}
+          >
+            <Download className="size-4" />
+            {exporting ? "Preparing…" : "Download catalogue"}
+          </Button>
+        </div>
+        {exportError && <p className="text-xs text-red-600">{exportError}</p>}
 
         <div className="flex gap-1 rounded-xl bg-zinc-200/70 p-1">
           {SECTIONS.map((s) => (
@@ -188,7 +234,7 @@ function ItemCard({
     designAttribute1?: string | null;
     designAttribute2?: string | null;
     dealerCode: string | null;
-    stockQty: number;
+    availableStockQty: number;
     piecesPerBox?: number | null;
     status: string;
     images: ProductImage[];
@@ -231,9 +277,9 @@ function ItemCard({
           )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <Badge tone={item.stockQty > 0 ? "success" : "danger"}>
-            {item.stockQty > 0
-              ? `${formatBoxQty(item.stockQty, item.piecesPerBox)} in stock`
+          <Badge tone={item.availableStockQty > 0 ? "success" : "danger"}>
+            {item.availableStockQty > 0
+              ? `${formatBoxQty(item.availableStockQty, item.piecesPerBox)} in stock`
               : "Out of stock"}
           </Badge>
           {!item.orderable && (

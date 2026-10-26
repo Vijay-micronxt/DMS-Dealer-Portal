@@ -127,6 +127,15 @@ function QuotationDetailPage() {
                         Delivery {formatDate(l.deliveryDate)}
                       </p>
                     )}
+                    {l.totalWeightKg != null && (
+                      <p className="text-xs text-zinc-500">
+                        Weight{" "}
+                        {l.totalWeightKg.toLocaleString("en-IN", {
+                          maximumFractionDigits: 1,
+                        })}{" "}
+                        kg
+                      </p>
+                    )}
                   </div>
                   <p className="shrink-0 font-medium tabular-nums text-zinc-900">
                     {formatCurrency(l.amount)}
@@ -134,6 +143,15 @@ function QuotationDetailPage() {
                 </div>
               ))}
             </div>
+            {q.lines.some((l) => l.totalWeightKg != null) && (
+              <p className="text-xs text-zinc-500">
+                Total weight{" "}
+                {q.lines
+                  .reduce((sum, l) => sum + (l.totalWeightKg ?? 0), 0)
+                  .toLocaleString("en-IN", { maximumFractionDigits: 1 })}{" "}
+                kg
+              </p>
+            )}
 
             <dl className="space-y-1.5 border-t border-zinc-200 pt-3 text-sm">
               <Row label="Items total" value={formatCurrency(q.netTotal)} />

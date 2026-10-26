@@ -118,10 +118,6 @@ function OrderDetailPage() {
                   {formatDate(order.expectedDispatch)}
                 </dd>
               </div>
-              <div>
-                <dt className="text-zinc-400">Channel</dt>
-                <dd className="text-zinc-900">{order.channel}</dd>
-              </div>
               {order.vehicle && (
                 <div>
                   <dt className="text-zinc-400">Vehicle</dt>
