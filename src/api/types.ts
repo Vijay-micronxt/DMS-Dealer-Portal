@@ -39,7 +39,11 @@ export type CatalogItem = {
   seriesRef: string | null;
   category: string | null;
   swatch: string | null;
-  stockQty: number;
+  /** Client finding "stock accuracy" — damage/insurance-claim and display-bay stock already
+   * excluded server-side (dms_erp.warehouse.utils.sellable_stock_for_item); the raw staff-facing
+   * total is never sent to a dealer session. See getExcludedStock for the "View more" breakdown
+   * of what this excludes. */
+  availableStockQty: number;
   status: string;
   isReorderable: boolean;
   isSellable: boolean;

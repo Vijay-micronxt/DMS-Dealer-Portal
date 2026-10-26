@@ -7,11 +7,35 @@ import {
   Package,
   Receipt,
   CircleUser,
+  ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { useEnquiryList } from "@/lib/enquiry-list";
 import { Spinner } from "@/components/ui/spinner";
 import { SetCredentialsPrompt } from "@/components/SetCredentialsPrompt";
+
+/** Header shortcut to the enquiry list (requested in place of a floating action button) --
+ * visible on every screen, not just the catalog pages the full-width EnquiryListLink banner
+ * already covers. The icon itself is always there for discoverability; the count badge only
+ * shows once something's actually been added. */
+function EnquiryListHeaderLink() {
+  const lines = useEnquiryList();
+  return (
+    <Link
+      to="/enquiry"
+      aria-label={`Enquiry list${lines.length > 0 ? ` (${lines.length} item${lines.length === 1 ? "" : "s"})` : ""}`}
+      className="relative flex h-8 w-8 items-center justify-center rounded-full text-zinc-600"
+    >
+      <ClipboardList className="h-5 w-5" />
+      {lines.length > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-zinc-900 px-1 text-[10px] font-semibold leading-none text-white">
+          {lines.length}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 const NAV_ITEMS = [
   { to: "/catalog", label: "Catalog", icon: Store },
@@ -49,7 +73,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="text-sm font-semibold tracking-tight text-zinc-900">
             Pacific Dealer Portal
           </span>
-          <span className="text-sm text-zinc-500">{user.name}</span>
+          <span className="flex items-center gap-2">
+            <EnquiryListHeaderLink />
+            <span className="text-sm text-zinc-500">{user.name}</span>
+          </span>
         </div>
       </header>
 

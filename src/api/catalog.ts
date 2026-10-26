@@ -104,3 +104,28 @@ export function suggestAlternatives(
     params: { item, limit },
   });
 }
+
+/** Client finding "stock accuracy" — the "View more" breakdown behind an item's
+ * availableStockQty: boxes sitting in a damage/insurance-claim or display bay, which
+ * availableStockQty already excludes from the regular in-stock count. */
+export interface ExcludedStockRow {
+  bayType: string;
+  boxes: number;
+}
+
+export function getExcludedStock(item: string): Promise<ExcludedStockRow[]> {
+  return authedCall("dms_erp.sales.dealer_portal_api.get_excluded_stock", {
+    method: "GET",
+    params: { item },
+  });
+}
+
+/**
+ * BRD C.14.1 — the dealer's own catalogue as a printable page (images, sizes, finishes, never
+ * prices), to save as PDF or share on WhatsApp. Only the signed-in dealer's own items.
+ */
+export function exportMyCatalog(): Promise<string> {
+  return authedCall("dms_erp.sales.dealer_portal_api.my_catalog_export", {
+    method: "GET",
+  });
+}

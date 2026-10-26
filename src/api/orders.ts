@@ -3,12 +3,21 @@ import type { Order, Paginated } from "@/api/types";
 
 export function listMyOrders(params: {
   stage?: string | undefined;
+  /** ISS "only show pending orders" — true hides Delivered/Cancelled when `stage` is left
+   * unset. Ignored once `stage` names a specific stage (including Delivered/Cancelled
+   * themselves, picked explicitly from a tab). */
+  excludeCompleted?: boolean | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }): Promise<Paginated<Order>> {
   return authedCall("dms_erp.sales.dealer_portal_api.list_my_orders", {
     method: "GET",
-    params,
+    params: {
+      stage: params.stage,
+      exclude_completed: params.excludeCompleted,
+      limit: params.limit,
+      offset: params.offset,
+    },
   });
 }
 

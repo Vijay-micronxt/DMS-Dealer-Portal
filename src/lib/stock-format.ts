@@ -25,3 +25,18 @@ export function formatBoxQty(
   if (boxes === 0) return `${sign}${pieces} pcs`;
   return `${sign}${boxes.toLocaleString("en-IN")} Box ${pieces} pcs`;
 }
+
+/** 1 ft = 0.3048 m exactly, so 1 sq ft = 0.09290304 m² -- the same factor the backend uses
+ * (dms_erp.catalog.utils.SQFT_TO_SQM). */
+export const SQFT_TO_SQM = 0.09290304;
+
+/**
+ * BRD C.1.3 -- area in both units staff and dealers quote in: "16 sq ft (1.49 m²)". sq ft is
+ * what's stored on the Item; m² is derived, never stored separately.
+ */
+export function formatArea(sqft: number | null | undefined): string {
+  const value = Number(sqft) || 0;
+  if (value <= 0) return "—";
+  const sqm = value * SQFT_TO_SQM;
+  return `${Number(value.toFixed(2)).toLocaleString("en-IN")} sq ft (${Number(sqm.toFixed(2)).toLocaleString("en-IN")} m²)`;
+}

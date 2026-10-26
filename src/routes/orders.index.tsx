@@ -8,7 +8,12 @@ import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { listMyOrders } from "@/api/orders";
 
+// "Pending" isn't a real Sales Order stage — it's the default view, everything still open
+// (not yet Delivered/Cancelled). Client finding: landing on "All" buried pending orders
+// under completed ones; this keeps the screen useful at a glance without hiding history,
+// which is still one tap away.
 const STAGES = [
+  "Pending",
   "All",
   "Confirmed",
   "Picking",
@@ -23,12 +28,16 @@ export const Route = createFileRoute("/orders/")({
 });
 
 function OrdersPage() {
-  const [stage, setStage] = React.useState<(typeof STAGES)[number]>("All");
+  const [stage, setStage] = React.useState<(typeof STAGES)[number]>("Pending");
 
   const query = useQuery({
     queryKey: ["my-orders", stage],
     queryFn: () =>
-      listMyOrders({ stage: stage === "All" ? undefined : stage, limit: 50 }),
+      listMyOrders({
+        stage: stage === "All" || stage === "Pending" ? undefined : stage,
+        excludeCompleted: stage === "Pending",
+        limit: 50,
+      }),
   });
 
   return (

@@ -2,7 +2,7 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
-import { formatBoxQty } from "@/lib/stock-format";
+import { formatArea, formatBoxQty } from "@/lib/stock-format";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { addToEnquiryList } from "@/lib/enquiry-list";
-import { getItem, suggestAlternatives } from "@/api/catalog";
+import { getExcludedStock, getItem, suggestAlternatives } from "@/api/catalog";
 import { raiseInquiry } from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
 import type { Inquiry } from "@/api/types";
@@ -20,6 +20,12 @@ import type { Inquiry } from "@/api/types";
 export const Route = createFileRoute("/catalog/$item")({
   component: ItemDetailPage,
 });
+
+const EXCLUDED_BAY_LABELS: Record<string, string> = {
+  damage: "Damaged",
+  insurance_claim: "Insurance claim",
+  display: "Display/sample",
+};
 
 function ItemDetailPage() {
   const { item: itemCode } = Route.useParams();
@@ -37,6 +43,13 @@ function ItemDetailPage() {
   );
   const [error, setError] = React.useState<string | null>(null);
   const [added, setAdded] = React.useState(false);
+  const [showExcludedStock, setShowExcludedStock] = React.useState(false);
+
+  const excludedStockQuery = useQuery({
+    queryKey: ["excluded-stock", itemCode],
+    queryFn: () => getExcludedStock(itemCode),
+    enabled: showExcludedStock,
+  });
 
   const raiseMutation = useMutation({
     mutationFn: () =>
@@ -61,7 +74,7 @@ function ItemDetailPage() {
     queryFn: () => suggestAlternatives(itemCode),
     // As soon as the item is out of stock -- not only after an enquiry -- so the dealer is shown
     // something they can order instead (Pacific's own pick first) while they're looking at it.
-    enabled: !!itemQuery.data && itemQuery.data.stockQty <= 0,
+    enabled: !!itemQuery.data && itemQuery.data.availableStockQty <= 0,
   });
 
   if (itemQuery.isLoading) {
@@ -84,7 +97,7 @@ function ItemDetailPage() {
   }
 
   const item = itemQuery.data;
-  const inStock = item.stockQty > 0 && item.isSellable;
+  const inStock = item.availableStockQty > 0 && item.isSellable;
 
   return (
     <AppShell>
@@ -112,16 +125,57 @@ function ItemDetailPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge tone={inStock ? "success" : "danger"}>
                 {inStock
-                  ? `${formatBoxQty(item.stockQty, item.piecesPerBox)} in stock`
+                  ? `${formatBoxQty(item.availableStockQty, item.piecesPerBox)} in stock`
                   : "Out of stock"}
               </Badge>
               {item.series && <Badge tone="info">{item.series}</Badge>}
               {!item.isSellable && <Badge tone="neutral">{item.status}</Badge>}
               {!item.orderable && <Badge tone="info">Inquire only</Badge>}
+              {!showExcludedStock && (
+                <button
+                  type="button"
+                  onClick={() => setShowExcludedStock(true)}
+                  className="text-xs font-medium text-zinc-500 underline"
+                >
+                  View more
+                </button>
+              )}
             </div>
+
+            {showExcludedStock && (
+              <div className="rounded-lg bg-zinc-50 px-2.5 py-2 text-xs text-zinc-600">
+                {excludedStockQuery.isLoading && <p>Checking…</p>}
+                {excludedStockQuery.isError && (
+                  <p className="text-red-600">Couldn't load this.</p>
+                )}
+                {excludedStockQuery.data && excludedStockQuery.data.length === 0 && (
+                  <p>No damaged or display stock for this item.</p>
+                )}
+                {excludedStockQuery.data && excludedStockQuery.data.length > 0 && (
+                  <>
+                    <p className="mb-1 font-medium text-zinc-500">
+                      Also exists, not counted above — ask Pacific if you're interested:
+                    </p>
+                    <div className="space-y-1">
+                      {excludedStockQuery.data.map((row) => (
+                        <div
+                          key={row.bayType}
+                          className="flex justify-between"
+                        >
+                          <span>{EXCLUDED_BAY_LABELS[row.bayType] ?? row.bayType}</span>
+                          <span className="font-medium text-zinc-900">
+                            {formatBoxQty(row.boxes, item.piecesPerBox)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div>
@@ -136,9 +190,7 @@ function ItemDetailPage() {
               </div>
               <div>
                 <dt className="text-zinc-400">Coverage / box</dt>
-                <dd className="text-zinc-900">
-                  {item.sqftPerBox ? `${item.sqftPerBox} sq ft` : "—"}
-                </dd>
+                <dd className="text-zinc-900">{formatArea(item.sqftPerBox)}</dd>
               </div>
               <div>
                 <dt className="text-zinc-400">Weight / box</dt>
@@ -288,8 +340,8 @@ function ItemDetailPage() {
                             </span>
                           )}
                         </span>
-                        <Badge tone={alt.stockQty > 0 ? "success" : "danger"}>
-                          {alt.stockQty > 0 ? "In stock" : "Out of stock"}
+                        <Badge tone={alt.availableStockQty > 0 ? "success" : "danger"}>
+                          {alt.availableStockQty > 0 ? "In stock" : "Out of stock"}
                         </Badge>
                       </div>
                     </Link>
