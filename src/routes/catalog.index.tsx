@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ItemThumbnail } from "@/components/ui/image-gallery";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { exportMyCatalog, getCatalog, resolveCode } from "@/api/catalog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -239,6 +239,7 @@ function ItemCard({
     status: string;
     images: ProductImage[];
     orderable: boolean;
+    price: number | null;
   };
 }) {
   return (
@@ -277,6 +278,9 @@ function ItemCard({
           )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <p className="text-sm font-semibold text-zinc-900">
+            {item.price !== null ? formatCurrency(item.price) : "Price on request"}
+          </p>
           <Badge tone={item.availableStockQty > 0 ? "success" : "danger"}>
             {item.availableStockQty > 0
               ? `${formatBoxQty(item.availableStockQty, item.piecesPerBox)} in stock`
