@@ -5,10 +5,18 @@ export function raiseInquiry(params: {
   item: string;
   qty: number;
   remarks?: string | undefined;
+  /** ISS-2026-00678 -- set when raised from the item page's damaged/insurance-claim
+   * bay stock display rather than the regular catalogue. */
+  damagedStock?: boolean | undefined;
 }): Promise<Inquiry> {
   return authedCall("dms_erp.sales.dealer_portal_api.raise_inquiry", {
     method: "POST",
-    params,
+    params: {
+      item: params.item,
+      qty: params.qty,
+      remarks: params.remarks,
+      damaged_stock: params.damagedStock,
+    },
   });
 }
 
@@ -16,7 +24,7 @@ export function raiseInquiry(params: {
  * `requestGroup` so Pacific can quote them together. Nothing is created unless every
  * line is valid. */
 export function raiseInquiries(params: {
-  items: { item: string; qty: number }[];
+  items: { item: string; qty: number; damagedStock?: boolean | undefined }[];
   remarks?: string | undefined;
 }): Promise<{ requestGroup: string; items: Inquiry[] }> {
   return authedCall("dms_erp.sales.dealer_portal_api.raise_inquiries", {

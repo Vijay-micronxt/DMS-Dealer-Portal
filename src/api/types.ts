@@ -92,6 +92,9 @@ export type Inquiry = {
   orderable: boolean;
   /** Several items raised together share one group id (the first enquiry's number). */
   requestGroup: string | null;
+  /** ISS-2026-00678 -- raised against damaged/insurance-claim bay stock specifically
+   * (see the item page's damaged-stock section), not regular inventory. */
+  damagedStock: boolean;
   /** The quotation Pacific prepared for this enquiry -- where the dealer sees the price and
    * accepts it to place the order. null until one is sent. */
   linkedQuotation: string | null;

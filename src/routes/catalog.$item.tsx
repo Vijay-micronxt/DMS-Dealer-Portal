@@ -27,6 +27,12 @@ const EXCLUDED_BAY_LABELS: Record<string, string> = {
   display: "Display/sample",
 };
 
+/** ISS-2026-00678 -- only damaged/insurance-claim bay stock can be added to an order
+ * (as a special-case, same rate as regular stock for now). Display/sample stock has
+ * its own separate workflow (Sample & Display Management) and is never ordered this
+ * way, so it's shown but gets no "Add to order" control. */
+const ORDERABLE_EXCLUDED_BAY_TYPES = new Set(["damage", "insurance_claim"]);
+
 function ItemDetailPage() {
   const { item: itemCode } = Route.useParams();
   const queryClient = useQueryClient();
@@ -43,12 +49,14 @@ function ItemDetailPage() {
   );
   const [error, setError] = React.useState<string | null>(null);
   const [added, setAdded] = React.useState(false);
-  const [showExcludedStock, setShowExcludedStock] = React.useState(false);
+  // ISS-2026-00678 -- one qty/added state per excluded-stock row (damage vs
+  // insurance_claim can both exist for the same item), keyed by bayType.
+  const [damagedQty, setDamagedQty] = React.useState<Record<string, string>>({});
+  const [damagedAdded, setDamagedAdded] = React.useState<Record<string, boolean>>({});
 
   const excludedStockQuery = useQuery({
     queryKey: ["excluded-stock", itemCode],
     queryFn: () => getExcludedStock(itemCode),
-    enabled: showExcludedStock,
   });
 
   const raiseMutation = useMutation({
@@ -134,46 +142,73 @@ function ItemDetailPage() {
               {item.series && <Badge tone="info">{item.series}</Badge>}
               {!item.isSellable && <Badge tone="neutral">{item.status}</Badge>}
               {!item.orderable && <Badge tone="info">Inquire only</Badge>}
-              {!showExcludedStock && (
-                <button
-                  type="button"
-                  onClick={() => setShowExcludedStock(true)}
-                  className="text-xs font-medium text-zinc-500 underline"
-                >
-                  View more
-                </button>
-              )}
             </div>
 
-            {showExcludedStock && (
+            {/* Client refinement, 27 Oct 2026 — this used to sit behind a "View more"
+                click (ISS-2026-00678). Dealers wouldn't necessarily know to look for it,
+                so now it shows automatically whenever the item actually has damaged/
+                display-bay stock, and stays silent otherwise rather than announcing
+                "no damaged stock" on every item. */}
+            {excludedStockQuery.data && excludedStockQuery.data.length > 0 && (
               <div className="rounded-lg bg-zinc-50 px-2.5 py-2 text-xs text-zinc-600">
-                {excludedStockQuery.isLoading && <p>Checking…</p>}
-                {excludedStockQuery.isError && (
-                  <p className="text-red-600">Couldn't load this.</p>
-                )}
-                {excludedStockQuery.data && excludedStockQuery.data.length === 0 && (
-                  <p>No damaged or display stock for this item.</p>
-                )}
-                {excludedStockQuery.data && excludedStockQuery.data.length > 0 && (
-                  <>
-                    <p className="mb-1 font-medium text-zinc-500">
-                      Also exists, not counted above — ask Pacific if you're interested:
-                    </p>
-                    <div className="space-y-1">
-                      {excludedStockQuery.data.map((row) => (
-                        <div
-                          key={row.bayType}
-                          className="flex justify-between"
-                        >
+                <p className="mb-1 font-medium text-zinc-500">
+                  Also exists, not counted above:
+                </p>
+                <div className="space-y-2">
+                  {excludedStockQuery.data.map((row) => {
+                    const orderable = ORDERABLE_EXCLUDED_BAY_TYPES.has(row.bayType);
+                    const rowQty = damagedQty[row.bayType] ?? "";
+                    return (
+                      <div key={row.bayType} className="space-y-1">
+                        <div className="flex justify-between">
                           <span>{EXCLUDED_BAY_LABELS[row.bayType] ?? row.bayType}</span>
                           <span className="font-medium text-zinc-900">
                             {formatBoxQty(row.boxes, item.piecesPerBox)}
                           </span>
                         </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                        {orderable && (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={row.boxes}
+                              inputMode="numeric"
+                              placeholder="Boxes"
+                              value={rowQty}
+                              onChange={(e) =>
+                                setDamagedQty((prev) => ({
+                                  ...prev,
+                                  [row.bayType]: e.target.value,
+                                }))
+                              }
+                              className="h-8 w-20 text-xs"
+                            />
+                            <Button
+                              variant="outline"
+                              className="h-8 px-2.5 text-xs"
+                              disabled={!rowQty || Number(rowQty) <= 0}
+                              onClick={() => {
+                                addToEnquiryList({
+                                  code: item.code,
+                                  name: item.name,
+                                  qty: Number(rowQty),
+                                  damagedStock: true,
+                                });
+                                setDamagedQty((prev) => ({ ...prev, [row.bayType]: "" }));
+                                setDamagedAdded((prev) => ({ ...prev, [row.bayType]: true }));
+                              }}
+                            >
+                              Add to order
+                            </Button>
+                            {damagedAdded[row.bayType] && (
+                              <span className="text-emerald-700">Added</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
