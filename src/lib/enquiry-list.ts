@@ -7,7 +7,16 @@ import { useSyncExternalStore } from "react";
  * dealer's login. Storage can be blocked or empty (private window): every read/write is
  * guarded and the list simply lives in memory for that session instead.
  */
-export type EnquiryLine = { code: string; name: string; qty: number };
+export type EnquiryLine = {
+  code: string;
+  name: string;
+  qty: number;
+  /** ISS-2026-00678 -- added from the item page's damaged/insurance-claim bay stock
+   * display, not the regular catalogue. Kept as its own line even when the same item
+   * code is already on the list as regular stock -- merging their qty would blur a
+   * damaged box into a request for a regular one. */
+  damagedStock?: boolean;
+};
 
 const KEY = "dms-portal-enquiry-list";
 const listeners = new Set<() => void>();
@@ -43,24 +52,34 @@ function commit(next: EnquiryLine[]) {
   listeners.forEach((l) => l());
 }
 
-/** Adding an item already on the list adds to its quantity rather than listing it twice. */
+/** Adding an item already on the list (same code AND same damagedStock) adds to its
+ * quantity rather than listing it twice -- a damaged-stock line and a regular line for
+ * the same item code stay separate rows, never merged into one. */
 export function addToEnquiryList(line: EnquiryLine) {
-  const existing = lines.find((l) => l.code === line.code);
+  const existing = lines.find(
+    (l) => l.code === line.code && !!l.damagedStock === !!line.damagedStock,
+  );
   commit(
     existing
       ? lines.map((l) =>
-          l.code === line.code ? { ...l, qty: l.qty + line.qty } : l,
+          l === existing ? { ...l, qty: l.qty + line.qty } : l,
         )
       : [...lines, line],
   );
 }
 
-export function setEnquiryQty(code: string, qty: number) {
-  commit(lines.map((l) => (l.code === code ? { ...l, qty } : l)));
+export function setEnquiryQty(code: string, qty: number, damagedStock?: boolean) {
+  commit(
+    lines.map((l) =>
+      l.code === code && !!l.damagedStock === !!damagedStock ? { ...l, qty } : l,
+    ),
+  );
 }
 
-export function removeFromEnquiryList(code: string) {
-  commit(lines.filter((l) => l.code !== code));
+export function removeFromEnquiryList(code: string, damagedStock?: boolean) {
+  commit(
+    lines.filter((l) => !(l.code === code && !!l.damagedStock === !!damagedStock)),
+  );
 }
 
 export function clearEnquiryList() {

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/erp-client";
@@ -35,7 +36,11 @@ function EnquiryListPage() {
   const sendMutation = useMutation({
     mutationFn: () =>
       raiseInquiries({
-        items: lines.map((l) => ({ item: l.code, qty: l.qty })),
+        items: lines.map((l) => ({
+          item: l.code,
+          qty: l.qty,
+          damagedStock: l.damagedStock,
+        })),
         remarks: remarks.trim() || undefined,
       }),
     onSuccess: () => {
@@ -73,12 +78,19 @@ function EnquiryListPage() {
           <>
             <div className="space-y-3">
               {lines.map((line) => (
-                <Card key={line.code}>
+                <Card key={`${line.code}-${line.damagedStock ? "damaged" : "regular"}`}>
                   <CardContent className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-zinc-900">
-                        {line.name}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate text-sm font-medium text-zinc-900">
+                          {line.name}
+                        </p>
+                        {line.damagedStock && (
+                          <Badge tone="warning" className="shrink-0">
+                            Damaged
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-zinc-500">{line.code}</p>
                     </div>
                     <label className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-500">
@@ -89,14 +101,20 @@ function EnquiryListPage() {
                         inputMode="numeric"
                         value={line.qty || ""}
                         onChange={(e) =>
-                          setEnquiryQty(line.code, Number(e.target.value) || 0)
+                          setEnquiryQty(
+                            line.code,
+                            Number(e.target.value) || 0,
+                            line.damagedStock,
+                          )
                         }
                         className="h-9 w-20"
                       />
                     </label>
                     <button
                       aria-label={`Remove ${line.name}`}
-                      onClick={() => removeFromEnquiryList(line.code)}
+                      onClick={() =>
+                        removeFromEnquiryList(line.code, line.damagedStock)
+                      }
                       className="shrink-0 p-1 text-zinc-400"
                     >
                       <Trash2 className="h-4 w-4" />

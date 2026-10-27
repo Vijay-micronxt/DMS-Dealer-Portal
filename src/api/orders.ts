@@ -3,10 +3,11 @@ import type { Order, Paginated } from "@/api/types";
 
 export function listMyOrders(params: {
   stage?: string | undefined;
-  /** ISS "only show pending orders" — true hides Delivered/Cancelled when `stage` is left
-   * unset. Ignored once `stage` names a specific stage (including Delivered/Cancelled
-   * themselves, picked explicitly from a tab). */
-  excludeCompleted?: boolean | undefined;
+  /** Client refinement, 27 Oct 2026 — the portal's Orders tabs collapse down to Open
+   * (stageGroup: "open" — Confirmed/Picking/Ready to Dispatch/Dispatched grouped together)
+   * and Cancelled (stage: "Cancelled"). No separate Pending tab. Ignored once `stage`
+   * names a specific stage. */
+  stageGroup?: "open" | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }): Promise<Paginated<Order>> {
@@ -14,7 +15,7 @@ export function listMyOrders(params: {
     method: "GET",
     params: {
       stage: params.stage,
-      exclude_completed: params.excludeCompleted,
+      stage_group: params.stageGroup,
       limit: params.limit,
       offset: params.offset,
     },
