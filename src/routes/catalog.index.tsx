@@ -51,6 +51,21 @@ function CatalogPage() {
       win.document.open();
       win.document.write(html);
       win.document.close();
+      // The exported page is raw server HTML with no way to actually save it --
+      // previously a dead end relying on the dealer knowing Ctrl+P themselves.
+      // A floating button calling window.print() gets them a real PDF via the
+      // browser's own "Save as PDF" print destination, no backend PDF pipeline needed.
+      const printBtn = win.document.createElement("button");
+      printBtn.textContent = "🖨️ Print / Save as PDF";
+      printBtn.setAttribute(
+        "style",
+        "position:fixed;top:16px;right:16px;z-index:9999;padding:10px 16px;" +
+          "background:#18181b;color:#fff;border:none;border-radius:8px;" +
+          "font-family:sans-serif;font-size:14px;font-weight:600;cursor:pointer;" +
+          "box-shadow:0 2px 8px rgba(0,0,0,0.2);",
+      );
+      printBtn.addEventListener("click", () => win.print());
+      win.document.body.appendChild(printBtn);
       win.focus();
     } catch (err) {
       win.close();

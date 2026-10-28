@@ -23,8 +23,8 @@ export const Route = createFileRoute("/catalog/$item")({
 });
 
 const EXCLUDED_BAY_LABELS: Record<string, string> = {
-  damage: "Damaged",
-  insurance_claim: "Insurance claim",
+  damage: "Damaged stock, condition as-is",
+  insurance_claim: "Insurance claim stock, condition as-is",
   display: "Display/sample",
 };
 
@@ -163,7 +163,7 @@ function ItemDetailPage() {
             {excludedStockQuery.data && excludedStockQuery.data.length > 0 && (
               <div className="rounded-lg bg-zinc-50 px-2.5 py-2 text-xs text-zinc-600">
                 <p className="mb-1 font-medium text-zinc-500">
-                  Also exists, not counted above:
+                  Also available, not counted above:
                 </p>
                 <div className="space-y-2">
                   {excludedStockQuery.data.map((row) => {
@@ -232,7 +232,7 @@ function ItemDetailPage() {
               </div>
               <div>
                 <dt className="text-zinc-400">Pieces / box</dt>
-                <dd className="text-zinc-900">{item.piecesPerBox ?? "—"}</dd>
+                <dd className="text-zinc-900">{item.piecesPerBox || "—"}</dd>
               </div>
               <div>
                 <dt className="text-zinc-400">Coverage / box</dt>

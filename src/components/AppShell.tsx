@@ -25,6 +25,7 @@ function EnquiryListHeaderLink() {
     <Link
       to="/enquiry"
       aria-label={`Enquiry list${lines.length > 0 ? ` (${lines.length} item${lines.length === 1 ? "" : "s"})` : ""}`}
+      title="Enquiry list"
       className="relative flex h-8 w-8 items-center justify-center rounded-full text-zinc-600"
     >
       <ClipboardList className="h-5 w-5" />
