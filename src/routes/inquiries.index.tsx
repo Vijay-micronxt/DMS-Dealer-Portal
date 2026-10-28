@@ -9,32 +9,38 @@ import { cn, formatDate } from "@/lib/utils";
 import { listMyEnquiries } from "@/api/inquiries";
 import { itemLabel } from "@/lib/item-label";
 
-const FILTERS = [
-  "All",
-  "Open",
-  "Available",
-  "Out of Stock",
-  "Converted to Order",
-  "Rejected",
-] as const;
+// Client request, 28 Oct 2026 -- collapsed from 6 tabs (All/Open/Available/Out of
+// Stock/Converted to Order/Rejected) down to 3. "Open" is now a catch-all bucket for
+// every non-terminal status (Open, Available, Partially Available, Out of Stock,
+// Pre-order Required, Quoted, Mixed, ...) -- not just the two named in the request --
+// so an enquiry can never fall through and vanish from every tab as new statuses
+// appear. The backend only matches one exact status per call, so this bucketing
+// happens client-side: fetch unfiltered, then filter by tab here.
+const FILTERS = ["Open", "Converted to Order", "Rejected"] as const;
+const TERMINAL_STATUSES = new Set(["Converted to Order", "Rejected"]);
 
 export const Route = createFileRoute("/inquiries/")({
   component: InquiriesPage,
 });
 
 function InquiriesPage() {
-  const [status, setStatus] = React.useState<(typeof FILTERS)[number]>("All");
+  const [tab, setTab] = React.useState<(typeof FILTERS)[number]>("Open");
 
   // One entry per enquiry the dealer made: items sent together from the enquiry list arrive as a
-  // single enquiry holding all of them, not one card per item.
+  // single enquiry holding all of them, not one card per item. Unfiltered here -- the tab is
+  // applied client-side below (see FILTERS' own note on why).
   const query = useQuery({
-    queryKey: ["my-inquiries", status],
-    queryFn: () =>
-      listMyEnquiries({
-        status: status === "All" ? undefined : status,
-        limit: 50,
-      }),
+    queryKey: ["my-inquiries"],
+    queryFn: () => listMyEnquiries({ limit: 50 }),
   });
+
+  const rows = React.useMemo(() => {
+    const items = query.data?.items ?? [];
+    if (tab === "Open") {
+      return items.filter((e) => !TERMINAL_STATUSES.has(e.status));
+    }
+    return items.filter((e) => e.status === tab);
+  }, [query.data, tab]);
 
   return (
     <AppShell>
@@ -45,10 +51,10 @@ function InquiriesPage() {
           {FILTERS.map((f) => (
             <button
               key={f}
-              onClick={() => setStatus(f)}
+              onClick={() => setTab(f)}
               className={cn(
                 "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium",
-                status === f
+                tab === f
                   ? "border-zinc-900 bg-zinc-900 text-white"
                   : "border-zinc-300 bg-white text-zinc-600",
               )}
@@ -65,14 +71,14 @@ function InquiriesPage() {
             onRetry={() => query.refetch()}
           />
         )}
-        {query.data && query.data.items.length === 0 && (
+        {query.isSuccess && rows.length === 0 && (
           <p className="py-10 text-center text-sm text-zinc-500">
             No enquiries here yet.
           </p>
         )}
 
         <div className="space-y-3">
-          {query.data?.items.map((enquiry) => {
+          {rows.map((enquiry) => {
             const shown = enquiry.items.slice(0, 2).map(itemLabel);
             const more = enquiry.itemCount - shown.length;
             return (

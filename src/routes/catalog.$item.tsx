@@ -13,7 +13,7 @@ import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { addToEnquiryList } from "@/lib/enquiry-list";
 import { getExcludedStock, getItem, suggestAlternatives } from "@/api/catalog";
-import { raiseInquiry } from "@/api/inquiries";
+import { raiseInquiry, requestQuotation } from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
 import { formatCurrency } from "@/lib/utils";
 import type { Inquiry } from "@/api/types";
@@ -76,6 +76,16 @@ function ItemDetailPage() {
       setError(
         err instanceof ApiError ? err.message : "Could not raise the enquiry.",
       ),
+  });
+
+  // Client request, 28 Oct 2026 -- shown only after the enquiry's actually been sent
+  // (raisedInquiry exists). Flags it as dealer-requested right where the dealer already
+  // is, instead of making them navigate to the enquiry afterward just to click this.
+  const askForQuotationMutation = useMutation({
+    mutationFn: () => requestQuotation(raisedInquiry!.number),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
+    },
   });
 
   const alternativesQuery = useQuery({
@@ -341,14 +351,16 @@ function ItemDetailPage() {
                   setQty("");
                   setAdded(true);
                 }}
-                disabled={!qty || Number(qty) <= 0}
+                disabled={
+                  !qty || Number(qty) <= 0 || added || raiseMutation.isPending
+                }
               >
                 Add to enquiry list
               </Button>
               <Button
                 onClick={() => raiseMutation.mutate()}
                 loading={raiseMutation.isPending}
-                disabled={!qty || Number(qty) <= 0}
+                disabled={!qty || Number(qty) <= 0 || added}
               >
                 Send this enquiry now
               </Button>
@@ -407,6 +419,21 @@ function ItemDetailPage() {
                   ? "Pacific will send you a quotation — you can accept it there to place the order."
                   : "This item isn't yet set up for ordering on your account — our team will follow up to get it added and quote you."}
               </p>
+              {askForQuotationMutation.isSuccess ? (
+                <p className="text-sm font-medium text-emerald-600">
+                  Quotation requested — Pacific will follow up.
+                </p>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => askForQuotationMutation.mutate()}
+                  disabled={askForQuotationMutation.isPending}
+                >
+                  {askForQuotationMutation.isPending
+                    ? "Requesting…"
+                    : "Ask for quotation"}
+                </Button>
+              )}
               <Link
                 to="/inquiries"
                 className="block text-center text-sm font-medium text-zinc-900 underline"
@@ -424,6 +451,21 @@ function ItemDetailPage() {
                 Your enquiry <strong>{raisedInquiry.number}</strong> has been
                 logged. We'll notify you once it's back in stock.
               </p>
+              {askForQuotationMutation.isSuccess ? (
+                <p className="text-sm font-medium text-emerald-600">
+                  Quotation requested — Pacific will follow up.
+                </p>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => askForQuotationMutation.mutate()}
+                  disabled={askForQuotationMutation.isPending}
+                >
+                  {askForQuotationMutation.isPending
+                    ? "Requesting…"
+                    : "Ask for quotation"}
+                </Button>
+              )}
               <Link
                 to="/inquiries"
                 className="block text-center text-sm font-medium text-zinc-900 underline"

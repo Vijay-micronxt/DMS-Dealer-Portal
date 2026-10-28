@@ -1,14 +1,15 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, toneForStatus } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { formatDate } from "@/lib/utils";
 import { itemLabel } from "@/lib/item-label";
-import { getMyEnquiry } from "@/api/inquiries";
+import { getMyEnquiry, requestQuotation } from "@/api/inquiries";
 
 const TERMINAL_STATUSES = new Set(["Converted to Order", "Rejected", "Closed"]);
 
@@ -20,10 +21,18 @@ export const Route = createFileRoute("/inquiries/$id")({
  * quantity and status, and the quotation(s) Pacific prepared. */
 function EnquiryDetailPage() {
   const { id } = Route.useParams();
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: ["inquiry", id],
     queryFn: () => getMyEnquiry(id),
+  });
+
+  const requestMutation = useMutation({
+    mutationFn: () => requestQuotation(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inquiry", id] });
+    },
   });
 
   if (query.isLoading) {
@@ -146,7 +155,7 @@ function EnquiryDetailPage() {
 
         {waiting.length > 0 && (
           <Card>
-            <CardContent>
+            <CardContent className="space-y-3">
               <p className="text-sm text-zinc-700">
                 {notOrderable.length === waiting.length
                   ? "These items aren't yet set up for ordering on your account — our team will follow up to get them added and quote you."
@@ -154,6 +163,30 @@ function EnquiryDetailPage() {
                     ? "Pacific will send you a quotation with the prices. Some items here aren't yet set up for ordering on your account — our team will follow up on those."
                     : "Pacific will send you a quotation with the prices. Accept it there to place the order."}
               </p>
+              {/* Client request, 28 Oct 2026 -- before this, a dealer could only wait
+                  silently here. Lets them actively nudge staff instead. */}
+              {waiting.some((i) => i.dealerRequestedQuote) ||
+              requestMutation.isSuccess ? (
+                <p className="text-sm font-medium text-emerald-600">
+                  Quotation requested — Pacific will follow up.
+                </p>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => requestMutation.mutate()}
+                  disabled={requestMutation.isPending}
+                >
+                  {requestMutation.isPending
+                    ? "Requesting…"
+                    : "Ask for quotation"}
+                </Button>
+              )}
+              {requestMutation.isError && (
+                <p className="text-sm text-rose-600">
+                  Couldn't send your request — try again.
+                </p>
+              )}
             </CardContent>
           </Card>
         )}

@@ -71,3 +71,13 @@ export function getMyEnquiry(enquiry: string): Promise<Enquiry> {
     params: { enquiry },
   });
 }
+
+/** Client request, 28 Oct 2026 -- flags every still-waiting item in this enquiry as
+ * dealer-requested, so staff can see and prioritize it. Silent/idempotent on an enquiry
+ * with nothing left to flag (already quoted or closed out). */
+export function requestQuotation(enquiry: string): Promise<{ flagged: number }> {
+  return authedCall("dms_erp.sales.dealer_portal_api.request_quotation", {
+    method: "POST",
+    params: { enquiry },
+  });
+}
