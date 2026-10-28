@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -19,7 +19,7 @@ import {
   setEnquiryQty,
   useEnquiryList,
 } from "@/lib/enquiry-list";
-import { raiseInquiries } from "@/api/inquiries";
+import { raiseInquiries, requestQuotation } from "@/api/inquiries";
 
 export const Route = createFileRoute("/enquiry")({
   component: EnquiryListPage,
@@ -29,11 +29,11 @@ export const Route = createFileRoute("/enquiry")({
  * a quotation (Quotes tab); accepting that is what places the order. */
 function EnquiryListPage() {
   const lines = useEnquiryList();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [remarks, setRemarks] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
+  const [sentGroup, setSentGroup] = React.useState<string | null>(null);
 
   const sendMutation = useMutation({
     mutationFn: () =>
@@ -45,15 +45,26 @@ function EnquiryListPage() {
         })),
         remarks: remarks.trim() || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       clearEnquiryList();
       queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
-      void navigate({ to: "/inquiries" });
+      // Stay on this page and show the "Ask for quotation" option right here,
+      // same as the single-item flow on the item page -- not a redirect away.
+      setSentGroup(result.requestGroup);
     },
     onError: (err) =>
       setError(
         err instanceof ApiError ? err.message : "Could not send the enquiry.",
       ),
+  });
+
+  // Client request, 28 Oct 2026 -- flags the just-sent enquiry as dealer-requested
+  // right where the dealer already is, instead of making them open it afterward.
+  const askForQuotationMutation = useMutation({
+    mutationFn: () => requestQuotation(sentGroup!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
+    },
   });
 
   const invalid = lines.some((l) => !(l.qty > 0));
@@ -69,7 +80,38 @@ function EnquiryListPage() {
         </Link>
         <h1 className="text-lg font-semibold text-zinc-900">Enquiry list</h1>
 
-        {lines.length === 0 ? (
+        {sentGroup ? (
+          <Card>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-zinc-700">
+                Your enquiry <strong>{sentGroup}</strong> has been logged.
+                Pacific will send you a quotation — you can accept it there to
+                place the order.
+              </p>
+              {askForQuotationMutation.isSuccess ? (
+                <p className="text-sm font-medium text-emerald-600">
+                  Quotation requested — Pacific will follow up.
+                </p>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => askForQuotationMutation.mutate()}
+                  disabled={askForQuotationMutation.isPending}
+                >
+                  {askForQuotationMutation.isPending
+                    ? "Requesting…"
+                    : "Ask for quotation"}
+                </Button>
+              )}
+              <Link
+                to="/inquiries"
+                className="block text-center text-sm font-medium text-zinc-900 underline"
+              >
+                View my enquiries
+              </Link>
+            </CardContent>
+          </Card>
+        ) : lines.length === 0 ? (
           <>
             <p className="pt-6 text-center text-sm text-zinc-500">
               Your enquiry list is empty. Add the items you want to ask about.
