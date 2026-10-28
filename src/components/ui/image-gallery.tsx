@@ -7,8 +7,9 @@ import type { ProductImage } from "@/api/types";
 /** BRD C.13.1 -- primary product image first, then application/room and any
  * additional images, in whatever order the backend returned them. */
 function orderedImages(images: ProductImage[]): ProductImage[] {
-  const primary = images.filter((i) => i.isPrimary);
-  const rest = images.filter((i) => !i.isPrimary);
+  const safeImages = Array.isArray(images) ? images : [];
+  const primary = safeImages.filter((i) => i.isPrimary);
+  const rest = safeImages.filter((i) => !i.isPrimary);
   return [...primary, ...rest];
 }
 
@@ -91,7 +92,11 @@ export function ItemThumbnail({
   images: ProductImage[];
   className?: string;
 }) {
-  const primary = images.find((i) => i.isPrimary) ?? images[0];
+  // `images` is typed as always-an-array, but a catalog search result's real shape isn't
+  // guaranteed to match at runtime (ISS report: every search crashed the page with "Cannot
+  // read properties of undefined (reading 'find')" -- some row's images came back missing).
+  const safeImages = Array.isArray(images) ? images : [];
+  const primary = safeImages.find((i) => i.isPrimary) ?? safeImages[0];
   return (
     <SafeImage
       src={primary ? resolveFileUrl(primary.image) : null}

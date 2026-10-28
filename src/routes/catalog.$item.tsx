@@ -15,6 +15,7 @@ import { addToEnquiryList } from "@/lib/enquiry-list";
 import { getExcludedStock, getItem, suggestAlternatives } from "@/api/catalog";
 import { raiseInquiry } from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
+import { formatCurrency } from "@/lib/utils";
 import type { Inquiry } from "@/api/types";
 
 export const Route = createFileRoute("/catalog/$item")({
@@ -130,6 +131,9 @@ function ItemDetailPage() {
               <p className="text-sm text-zinc-500">
                 {item.code}
                 {item.dealerCode ? ` · your code ${item.dealerCode}` : ""}
+              </p>
+              <p className="mt-1 text-xl font-semibold text-zinc-900">
+                {item.price !== null ? formatCurrency(item.price) : "Price on request"}
               </p>
             </div>
 

@@ -20,10 +20,14 @@ export type BatchSummary = {
 
 /** dms_erp.sales.dealer_portal_api's catalog entry -- catalog.api.get_product's shape
  * with the full per-dealer `dealerCodes` list stripped down to just this dealer's own
- * `dealerCode`, plus `topBatches`. There is deliberately no price here: Pacific's
- * price to a dealer depends on delivery and other details, so it appears only on a
- * quotation. */
+ * `dealerCode`, plus `topBatches`. */
 export type CatalogItem = {
+  /** Client reversal, Oct 2026 — previously no price showed here at all ("don't show
+   * price before quotation"), but quotation is no longer mandatory to place an order
+   * (WhatsApp/portal can both go straight to an order), so the dealer needs a starting
+   * number at inquiry time. This dealer's own tier/override rate — null when nothing
+   * resolves (e.g. the price lists are still empty); render "Price on request", never 0. */
+  price: number | null;
   id: string;
   code: string;
   name: string;
@@ -76,6 +80,10 @@ export type Inquiry = {
   /** ISS-2026-00636 -- the style name typed through WhatsApp's "Custom Style"
    * option, when the enquiry has no catalog item; null otherwise. */
   requestedStyle: string | null;
+  /** Client reversal, Oct 2026 -- this dealer's own tier/override rate at the time of
+   * this enquiry, same resolution CatalogItem.price uses. Null for a Custom Style
+   * enquiry (no item) or when nothing resolves yet; never 0. */
+  price: number | null;
   qty: number;
   weightPerBoxKg: number | null;
   totalWeightKg: number | null;
