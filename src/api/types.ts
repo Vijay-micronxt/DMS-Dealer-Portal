@@ -91,6 +91,10 @@ export type Inquiry = {
   source: string;
   expectedDelivery: string | null;
   followUpDate: string | null;
+  /** Client request, 28 Oct 2026 -- set when the dealer clicked "Ask for quotation" on this
+   * enquiry while it was still waiting on one (dealer_portal_api.request_quotation). */
+  dealerRequestedQuote: boolean;
+  dealerRequestedQuoteAt: string | null;
   assignedTo: string | null;
   remarks: string | null;
   whatsappReplied: boolean;

@@ -26,9 +26,12 @@ function EnquiryListHeaderLink() {
       to="/enquiry"
       aria-label={`Enquiry list${lines.length > 0 ? ` (${lines.length} item${lines.length === 1 ? "" : "s"})` : ""}`}
       title="Enquiry list"
-      className="relative flex h-8 w-8 items-center justify-center rounded-full text-zinc-600"
+      className="relative flex flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-zinc-600"
     >
       <ClipboardList className="h-5 w-5" />
+      {/* Client request, 28 Oct 2026 -- the hover-only title tooltip did nothing on
+          mobile (no hover there); a static label under the icon works everywhere. */}
+      <span className="text-[9px] font-medium leading-none">Enquiry</span>
       {lines.length > 0 && (
         <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-zinc-900 px-1 text-[10px] font-semibold leading-none text-white">
           {lines.length}

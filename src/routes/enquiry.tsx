@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/erp-client";
+import { formatCurrency } from "@/lib/utils";
+import { formatBoxQty } from "@/lib/stock-format";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { getCatalog, resolveCode } from "@/api/catalog";
 import {
@@ -255,6 +257,25 @@ function AddItem({
                     {[item.size, item.finish].filter(Boolean).length > 0
                       ? ` · ${[item.size, item.finish].filter(Boolean).join(" / ")}`
                       : ""}
+                  </p>
+                  {/* Client request, 28 Oct 2026: a dealer using this quick-add won't go back
+                      to the catalog page to check price/stock first -- show both right here. */}
+                  <p className="truncate text-xs">
+                    <span className="font-medium text-zinc-900">
+                      {item.price !== null
+                        ? `${formatCurrency(item.price)} / Box`
+                        : "Price on request"}
+                    </span>
+                    <span className="text-zinc-400"> · </span>
+                    <span
+                      className={
+                        item.availableStockQty > 0 ? "text-emerald-600" : "text-rose-600"
+                      }
+                    >
+                      {item.availableStockQty > 0
+                        ? `${formatBoxQty(item.availableStockQty, item.piecesPerBox)} in stock`
+                        : "Out of stock"}
+                    </span>
                   </p>
                 </div>
                 <Button
