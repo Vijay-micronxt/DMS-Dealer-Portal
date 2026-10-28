@@ -279,7 +279,14 @@ function ItemCard({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <p className="text-sm font-semibold text-zinc-900">
-            {item.price !== null ? formatCurrency(item.price) : "Price on request"}
+            {item.price !== null ? (
+              <>
+                {formatCurrency(item.price)}
+                <span className="text-xs font-normal text-zinc-500"> / Box</span>
+              </>
+            ) : (
+              "Price on request"
+            )}
           </p>
           <Badge tone={item.availableStockQty > 0 ? "success" : "danger"}>
             {item.availableStockQty > 0

@@ -133,7 +133,14 @@ function ItemDetailPage() {
                 {item.dealerCode ? ` · your code ${item.dealerCode}` : ""}
               </p>
               <p className="mt-1 text-xl font-semibold text-zinc-900">
-                {item.price !== null ? formatCurrency(item.price) : "Price on request"}
+                {item.price !== null ? (
+                  <>
+                    {formatCurrency(item.price)}
+                    <span className="text-sm font-normal text-zinc-500"> / Box</span>
+                  </>
+                ) : (
+                  "Price on request"
+                )}
               </p>
             </div>
 
