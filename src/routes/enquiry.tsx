@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ClickableThumbnail } from "@/components/ui/image-gallery";
+import { BoxesPiecesFields } from "@/components/ui/boxes-pieces-fields";
 import { ApiError } from "@/lib/erp-client";
 import { formatCurrency } from "@/lib/utils";
 import { formatBoxQty } from "@/lib/stock-format";
@@ -16,10 +18,16 @@ import {
   addToEnquiryList,
   clearEnquiryList,
   removeFromEnquiryList,
+  setEnquiryPieces,
   setEnquiryQty,
   useEnquiryList,
 } from "@/lib/enquiry-list";
-import { raiseInquiries, requestQuotation } from "@/api/inquiries";
+import {
+  convertToOrder,
+  raiseInquiries,
+  requestQuotation,
+} from "@/api/inquiries";
+import type { Inquiry } from "@/api/types";
 
 export const Route = createFileRoute("/enquiry")({
   component: EnquiryListPage,
@@ -30,27 +38,31 @@ export const Route = createFileRoute("/enquiry")({
 function EnquiryListPage() {
   const lines = useEnquiryList();
   const queryClient = useQueryClient();
+  const navigate = Route.useNavigate();
   const [remarks, setRemarks] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [sentGroup, setSentGroup] = React.useState<string | null>(null);
+  const [sentItems, setSentItems] = React.useState<Inquiry[]>([]);
 
   const sendMutation = useMutation({
     mutationFn: () =>
       raiseInquiries({
         items: lines.map((l) => ({
           item: l.code,
-          qty: l.qty,
+          qty: l.pieces ?? 0,
           damagedStock: l.damagedStock,
+          enteredBoxes: l.qty,
         })),
         remarks: remarks.trim() || undefined,
       }),
     onSuccess: (result) => {
       clearEnquiryList();
       queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
-      // Stay on this page and show the "Ask for quotation" option right here,
-      // same as the single-item flow on the item page -- not a redirect away.
+      // Stay on this page and show the "Ask for quotation"/"Create order" options
+      // right here, same as the single-item flow on the item page -- not a redirect away.
       setSentGroup(result.requestGroup);
+      setSentItems(result.items);
     },
     onError: (err) =>
       setError(
@@ -65,6 +77,42 @@ function EnquiryListPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
     },
+  });
+
+  // BRD C.13.1, re-enabled 2 Nov 2026 -- convert_to_order only ever builds one order
+  // from one inquiry's own lines (no group/batch variant), so a multi-item enquiry
+  // becomes one order per item here, all carrying the same PO number/dispatch date
+  // entered once -- not a single combined order.
+  const [orderPo, setOrderPo] = React.useState("");
+  const [orderDispatchDate, setOrderDispatchDate] = React.useState("");
+  const [orderError, setOrderError] = React.useState<string | null>(null);
+  const allOrderable =
+    sentItems.length > 0 && sentItems.every((i) => i.orderable);
+  const createOrderMutation = useMutation({
+    mutationFn: async () => {
+      const orders = [];
+      for (const inquiry of sentItems) {
+        orders.push(
+          await convertToOrder({
+            inquiry: inquiry.id,
+            expectedDispatch: orderDispatchDate,
+            customerPo: orderPo.trim(),
+          }),
+        );
+      }
+      return orders;
+    },
+    onSuccess: (orders) => {
+      queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
+      queryClient.invalidateQueries({ queryKey: ["my-orders"] });
+      if (orders.length === 1 && orders[0]) {
+        void navigate({ to: "/orders/$id", params: { id: orders[0].id } });
+      }
+    },
+    onError: (err) =>
+      setOrderError(
+        err instanceof ApiError ? err.message : "Could not create the order.",
+      ),
   });
 
   const invalid = lines.some((l) => !(l.qty > 0));
@@ -85,23 +133,88 @@ function EnquiryListPage() {
             <CardContent className="space-y-3">
               <p className="text-sm text-zinc-700">
                 Your enquiry <strong>{sentGroup}</strong> has been logged.
-                Pacific will send you a quotation — you can accept it there to
-                place the order.
+                {!createOrderMutation.isSuccess && (
+                  <>
+                    {" "}
+                    {!allOrderable || askForQuotationMutation.isSuccess
+                      ? "Pacific will send you a quotation — you can accept it there to place the order."
+                      : "Create an order now, or ask Pacific for a quotation first."}
+                  </>
+                )}
               </p>
+
+              {createOrderMutation.isSuccess ? (
+                <p className="text-sm font-medium text-emerald-600">
+                  {createOrderMutation.data.length === 1
+                    ? "Order created."
+                    : `${createOrderMutation.data.length} orders created (one per item).`}
+                </p>
+              ) : (
+                // Client request, 2 Nov 2026 -- once a quotation's been asked for, Pacific is
+                // now the one pricing this enquiry; self-service "Create order" no longer
+                // applies, so it's hidden instead of staying alongside the quotation request.
+                allOrderable &&
+                !askForQuotationMutation.isSuccess && (
+                  <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
+                    {sentItems.length > 1 && (
+                      <p className="text-xs text-zinc-500">
+                        One order per item ({sentItems.length} total) — this
+                        can't yet be combined into a single order.
+                      </p>
+                    )}
+                    <label className="block text-xs font-medium text-zinc-700">
+                      Your PO number
+                      <Input
+                        value={orderPo}
+                        onChange={(e) => setOrderPo(e.target.value)}
+                        className="mt-1 h-9 text-sm"
+                        placeholder="PO-2026-001"
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-zinc-700">
+                      Expected dispatch date
+                      <Input
+                        type="date"
+                        value={orderDispatchDate}
+                        onChange={(e) => setOrderDispatchDate(e.target.value)}
+                        className="mt-1 h-9 text-sm"
+                      />
+                    </label>
+                    {orderError && (
+                      <p className="text-sm text-red-600">{orderError}</p>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => createOrderMutation.mutate()}
+                      loading={createOrderMutation.isPending}
+                      disabled={!orderPo.trim() || !orderDispatchDate}
+                    >
+                      Create order{sentItems.length > 1 ? "s" : ""}
+                    </Button>
+                  </div>
+                )
+              )}
+
               {askForQuotationMutation.isSuccess ? (
                 <p className="text-sm font-medium text-emerald-600">
                   Quotation requested — Pacific will follow up.
                 </p>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={() => askForQuotationMutation.mutate()}
-                  disabled={askForQuotationMutation.isPending}
-                >
-                  {askForQuotationMutation.isPending
-                    ? "Requesting…"
-                    : "Ask for quotation"}
-                </Button>
+                // Client request, 2 Nov 2026 (mirrors the Create order guard above) -- once
+                // an order's been created directly, there's nothing left to quote.
+                !createOrderMutation.isSuccess && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => askForQuotationMutation.mutate()}
+                    disabled={askForQuotationMutation.isPending}
+                  >
+                    {askForQuotationMutation.isPending
+                      ? "Requesting…"
+                      : "Ask for quotation"}
+                  </Button>
+                )
               )}
               <Link
                 to="/inquiries"
@@ -122,8 +235,15 @@ function EnquiryListPage() {
           <>
             <div className="space-y-3">
               {lines.map((line) => (
-                <Card key={`${line.code}-${line.damagedStock ? "damaged" : "regular"}`}>
+                <Card
+                  key={`${line.code}-${line.damagedStock ? "damaged" : "regular"}`}
+                >
                   <CardContent className="flex items-center gap-3">
+                    <ClickableThumbnail
+                      images={line.images ?? []}
+                      className="h-12 w-12"
+                      alt={line.name}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <p className="truncate text-sm font-medium text-zinc-900">
@@ -137,23 +257,27 @@ function EnquiryListPage() {
                       </div>
                       <p className="text-xs text-zinc-500">{line.code}</p>
                     </div>
-                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-500">
-                      Boxes
-                      <Input
-                        type="number"
-                        min={1}
-                        inputMode="numeric"
-                        value={line.qty || ""}
-                        onChange={(e) =>
-                          setEnquiryQty(
-                            line.code,
-                            Number(e.target.value) || 0,
-                            line.damagedStock,
-                          )
-                        }
-                        className="h-9 w-20"
-                      />
-                    </label>
+                    <BoxesPiecesFields
+                      boxes={line.qty ? String(line.qty) : ""}
+                      pieces={line.pieces ? String(line.pieces) : ""}
+                      onBoxesChange={(v) =>
+                        setEnquiryQty(
+                          line.code,
+                          Number(v) || 0,
+                          line.damagedStock,
+                        )
+                      }
+                      onPiecesChange={(v) =>
+                        setEnquiryPieces(
+                          line.code,
+                          Number(v) || 0,
+                          line.damagedStock,
+                        )
+                      }
+                      piecesPerBox={line.piecesPerBox}
+                      className="w-auto shrink-0"
+                      inputClassName="h-9 w-20 text-sm"
+                    />
                     <button
                       aria-label={`Remove ${line.name}`}
                       onClick={() =>
@@ -311,7 +435,9 @@ function AddItem({
                     <span className="text-zinc-400"> · </span>
                     <span
                       className={
-                        item.availableStockQty > 0 ? "text-emerald-600" : "text-rose-600"
+                        item.availableStockQty > 0
+                          ? "text-emerald-600"
+                          : "text-rose-600"
                       }
                     >
                       {item.availableStockQty > 0
@@ -330,6 +456,8 @@ function AddItem({
                       code: item.code,
                       name: item.name,
                       qty: 1,
+                      images: item.images,
+                      piecesPerBox: item.piecesPerBox,
                     })
                   }
                 >
