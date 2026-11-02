@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ImageOff } from "lucide-react";
+import { ImageOff, X } from "lucide-react";
 import { resolveFileUrl } from "@/lib/erp-client";
 import { cn } from "@/lib/utils";
 import type { ProductImage } from "@/api/types";
@@ -90,7 +90,7 @@ export function ItemThumbnail({
   className,
 }: {
   images: ProductImage[];
-  className?: string;
+  className?: string | undefined;
 }) {
   // `images` is typed as always-an-array, but a catalog search result's real shape isn't
   // guaranteed to match at runtime (ISS report: every search crashed the page with "Cannot
@@ -102,5 +102,66 @@ export function ItemThumbnail({
       src={primary ? resolveFileUrl(primary.image) : null}
       className={cn("shrink-0 rounded-lg", className)}
     />
+  );
+}
+
+/** Client request, 2 Nov 2026 -- wherever an item thumbnail shows in a list (the enquiry
+ * cart, an enquiry's item list, ...) that isn't already a link to that item's own detail
+ * page (which already shows the full ImageGallery), tapping it pops the same gallery up
+ * over the current screen instead. Renders a plain, non-interactive ItemThumbnail with no
+ * popup when there's nothing to show -- a real image is required to make the thumbnail
+ * tappable at all. */
+export function ClickableThumbnail({
+  images,
+  className,
+  alt,
+}: {
+  images: ProductImage[];
+  className?: string | undefined;
+  alt?: string | undefined;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const safeImages = Array.isArray(images) ? images : [];
+
+  if (safeImages.length === 0) {
+    return <ItemThumbnail images={safeImages} className={className} />;
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={alt ? `View ${alt} images` : "View item images"}
+        className="shrink-0"
+      >
+        <ItemThumbnail images={safeImages} className={className} />
+      </button>
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setOpen(false)}
+        >
+          <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between">
+              {alt && (
+                <p className="truncate text-sm font-medium text-white">{alt}</p>
+              )}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+                className="ml-auto rounded-full bg-white/10 p-1.5 text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <ImageGallery images={safeImages} />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

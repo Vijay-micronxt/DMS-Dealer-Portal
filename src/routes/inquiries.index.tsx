@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, toneForStatus } from "@/components/ui/badge";
@@ -45,7 +46,15 @@ function InquiriesPage() {
   return (
     <AppShell>
       <div className="space-y-4">
-        <h1 className="text-lg font-semibold text-zinc-900">My enquiries</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-zinc-900">My enquiries</h1>
+          <Link
+            to="/enquiry"
+            className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900"
+          >
+            <Plus className="h-4 w-4" /> New enquiry
+          </Link>
+        </div>
 
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
           {FILTERS.map((f) => (

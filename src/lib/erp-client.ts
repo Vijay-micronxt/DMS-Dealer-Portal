@@ -66,7 +66,10 @@ function extractServerMessage(body: unknown): string | null {
 /**
  * Shared by callMethod and uploadFile — parses the raw fetch Response, throws ApiError on a
  * non-OK status (unwrapping Frappe's server message when present), and unwraps the
- * `{"message": ...}` envelope on success when present, otherwise returns the body as-is.
+ * `{"message": ...}` envelope on success. Confirmed, 2 Nov 2026: frappe.handler only ever
+ * sets `message` when a whitelisted method's return value isn't `None`, so a message-less
+ * object body means the call genuinely returned `None`, not an unwrapped payload -- resolved
+ * as `undefined`, not the raw envelope.
  */
 async function handleResponse<T>(res: Response): Promise<T> {
   const text = await res.text();
@@ -97,12 +100,20 @@ async function handleResponse<T>(res: Response): Promise<T> {
     throw new ApiError(serverMessage ?? fallback, res.status, exceptionType);
   }
 
-  if (
-    parsed !== null &&
-    typeof parsed === "object" &&
-    "message" in (parsed as Record<string, unknown>)
-  ) {
-    return (parsed as Record<string, unknown>)["message"] as T;
+  if (parsed !== null && typeof parsed === "object") {
+    const record = parsed as Record<string, unknown>;
+    if ("message" in record) {
+      return record["message"] as T;
+    }
+    // Client finding, 2 Nov 2026 -- frappe.handler only sets response['message'] when a
+    // whitelisted method's return value isn't None; when it genuinely returns None (e.g.
+    // dealer_portal_api.resolve_code for "no match"), the body is a bare `{}` with no
+    // message key at all, not `{"message": null}`. Returning that raw envelope as T (old
+    // behavior) made a correct "no result" look like a truthy, defined empty object --
+    // e.g. resolveCode("no such item") came back as `{}` instead of null/undefined, so
+    // catalog.index.tsx's `codeQuery.data ? <ItemCard .../> : "No item matches"` always
+    // took the truthy branch and rendered a blank, fieldless card.
+    return undefined as T;
   }
   return parsed as T;
 }

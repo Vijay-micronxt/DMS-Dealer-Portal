@@ -8,12 +8,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ImageGallery, ItemThumbnail } from "@/components/ui/image-gallery";
+import {
+  BoxesPiecesFields,
+  readBoxesAndPieces,
+} from "@/components/ui/boxes-pieces-fields";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { addToEnquiryList } from "@/lib/enquiry-list";
 import { getExcludedStock, getItem, suggestAlternatives } from "@/api/catalog";
-import { raiseInquiry, requestQuotation } from "@/api/inquiries";
+import {
+  convertToOrder,
+  raiseInquiry,
+  requestQuotation,
+} from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
 import { formatCurrency } from "@/lib/utils";
 import type { Inquiry } from "@/api/types";
@@ -37,13 +45,15 @@ const ORDERABLE_EXCLUDED_BAY_TYPES = new Set(["damage", "insurance_claim"]);
 function ItemDetailPage() {
   const { item: itemCode } = Route.useParams();
   const queryClient = useQueryClient();
+  const navigate = Route.useNavigate();
 
   const itemQuery = useQuery({
     queryKey: ["item", itemCode],
     queryFn: () => getItem(itemCode),
   });
 
-  const [qty, setQty] = React.useState("");
+  const [qtyBoxes, setQtyBoxes] = React.useState("");
+  const [qtyPieces, setQtyPieces] = React.useState("");
   const [remarks, setRemarks] = React.useState("");
   const [raisedInquiry, setRaisedInquiry] = React.useState<Inquiry | null>(
     null,
@@ -52,8 +62,15 @@ function ItemDetailPage() {
   const [added, setAdded] = React.useState(false);
   // ISS-2026-00678 -- one qty/added state per excluded-stock row (damage vs
   // insurance_claim can both exist for the same item), keyed by bayType.
-  const [damagedQty, setDamagedQty] = React.useState<Record<string, string>>({});
-  const [damagedAdded, setDamagedAdded] = React.useState<Record<string, boolean>>({});
+  const [damagedQty, setDamagedQty] = React.useState<Record<string, string>>(
+    {},
+  );
+  const [damagedPieces, setDamagedPieces] = React.useState<
+    Record<string, string>
+  >({});
+  const [damagedAdded, setDamagedAdded] = React.useState<
+    Record<string, boolean>
+  >({});
 
   const excludedStockQuery = useQuery({
     queryKey: ["excluded-stock", itemCode],
@@ -61,12 +78,20 @@ function ItemDetailPage() {
   });
 
   const raiseMutation = useMutation({
-    mutationFn: () =>
-      raiseInquiry({
+    mutationFn: () => {
+      const combined = readBoxesAndPieces(
+        qtyBoxes,
+        qtyPieces,
+        itemQuery.data?.piecesPerBox,
+      );
+      if (!combined) throw new Error("Enter a quantity.");
+      return raiseInquiry({
         item: itemCode,
-        qty: Number(qty),
+        qty: combined.pieces,
         remarks: remarks || undefined,
-      }),
+        enteredBoxes: combined.boxes,
+      });
+    },
     onSuccess: (inquiry) => {
       setRaisedInquiry(inquiry);
       setError(null);
@@ -86,6 +111,29 @@ function ItemDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
     },
+  });
+
+  // BRD C.13.1 -- "if in stock, the dealer can convert the enquiry to an order,"
+  // offered again (2 Nov 2026) right alongside Ask for quotation.
+  const [orderPo, setOrderPo] = React.useState("");
+  const [orderDispatchDate, setOrderDispatchDate] = React.useState("");
+  const [orderError, setOrderError] = React.useState<string | null>(null);
+  const createOrderMutation = useMutation({
+    mutationFn: () =>
+      convertToOrder({
+        inquiry: raisedInquiry!.id,
+        expectedDispatch: orderDispatchDate,
+        customerPo: orderPo.trim(),
+      }),
+    onSuccess: (order) => {
+      queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
+      queryClient.invalidateQueries({ queryKey: ["my-orders"] });
+      void navigate({ to: "/orders/$id", params: { id: order.id } });
+    },
+    onError: (err) =>
+      setOrderError(
+        err instanceof ApiError ? err.message : "Could not create the order.",
+      ),
   });
 
   const alternativesQuery = useQuery({
@@ -146,7 +194,10 @@ function ItemDetailPage() {
                 {item.price !== null ? (
                   <>
                     {formatCurrency(item.price)}
-                    <span className="text-sm font-normal text-zinc-500"> / Box</span>
+                    <span className="text-sm font-normal text-zinc-500">
+                      {" "}
+                      / Box
+                    </span>
                   </>
                 ) : (
                   "Price on request"
@@ -164,74 +215,6 @@ function ItemDetailPage() {
               {!item.isSellable && <Badge tone="neutral">{item.status}</Badge>}
               {!item.orderable && <Badge tone="info">Inquire only</Badge>}
             </div>
-
-            {/* Client refinement, 27 Oct 2026 — this used to sit behind a "View more"
-                click (ISS-2026-00678). Dealers wouldn't necessarily know to look for it,
-                so now it shows automatically whenever the item actually has damaged/
-                display-bay stock, and stays silent otherwise rather than announcing
-                "no damaged stock" on every item. */}
-            {excludedStockQuery.data && excludedStockQuery.data.length > 0 && (
-              <div className="rounded-lg bg-zinc-50 px-2.5 py-2 text-xs text-zinc-600">
-                <p className="mb-1 font-medium text-zinc-500">
-                  Also available, not counted above:
-                </p>
-                <div className="space-y-2">
-                  {excludedStockQuery.data.map((row) => {
-                    const orderable = ORDERABLE_EXCLUDED_BAY_TYPES.has(row.bayType);
-                    const rowQty = damagedQty[row.bayType] ?? "";
-                    return (
-                      <div key={row.bayType} className="space-y-1">
-                        <div className="flex justify-between">
-                          <span>{EXCLUDED_BAY_LABELS[row.bayType] ?? row.bayType}</span>
-                          <span className="font-medium text-zinc-900">
-                            {formatBoxQty(row.boxes, item.piecesPerBox)}
-                          </span>
-                        </div>
-                        {orderable && (
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min={1}
-                              max={row.boxes}
-                              inputMode="numeric"
-                              placeholder="Boxes"
-                              value={rowQty}
-                              onChange={(e) =>
-                                setDamagedQty((prev) => ({
-                                  ...prev,
-                                  [row.bayType]: e.target.value,
-                                }))
-                              }
-                              className="h-8 w-20 text-xs"
-                            />
-                            <Button
-                              variant="outline"
-                              className="h-8 px-2.5 text-xs"
-                              disabled={!rowQty || Number(rowQty) <= 0}
-                              onClick={() => {
-                                addToEnquiryList({
-                                  code: item.code,
-                                  name: item.name,
-                                  qty: Number(rowQty),
-                                  damagedStock: true,
-                                });
-                                setDamagedQty((prev) => ({ ...prev, [row.bayType]: "" }));
-                                setDamagedAdded((prev) => ({ ...prev, [row.bayType]: true }));
-                              }}
-                            >
-                              Add to order
-                            </Button>
-                            {damagedAdded[row.bayType] && (
-                              <span className="text-emerald-700">Added</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div>
@@ -316,13 +299,13 @@ function ItemDetailPage() {
                 items to your enquiry list to ask about them together.
               </p>
               <label className="block text-sm font-medium text-zinc-700">
-                Quantity (boxes)
-                <Input
-                  type="number"
-                  min={1}
-                  inputMode="numeric"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
+                Quantity
+                <BoxesPiecesFields
+                  boxes={qtyBoxes}
+                  pieces={qtyPieces}
+                  onBoxesChange={setQtyBoxes}
+                  onPiecesChange={setQtyPieces}
+                  piecesPerBox={item.piecesPerBox}
                   className="mt-1.5"
                 />
               </label>
@@ -343,16 +326,28 @@ function ItemDetailPage() {
               <Button
                 variant="outline"
                 onClick={() => {
+                  const combined = readBoxesAndPieces(
+                    qtyBoxes,
+                    qtyPieces,
+                    item.piecesPerBox,
+                  );
+                  if (!combined) return;
                   addToEnquiryList({
                     code: item.code,
                     name: item.name,
-                    qty: Number(qty),
+                    qty: combined.boxes,
+                    pieces: combined.pieces || undefined,
+                    images: item.images,
+                    piecesPerBox: item.piecesPerBox,
                   });
-                  setQty("");
+                  setQtyBoxes("");
+                  setQtyPieces("");
                   setAdded(true);
                 }}
                 disabled={
-                  !qty || Number(qty) <= 0 || added || raiseMutation.isPending
+                  !readBoxesAndPieces(qtyBoxes, qtyPieces, item.piecesPerBox) ||
+                  added ||
+                  raiseMutation.isPending
                 }
               >
                 Add to enquiry list
@@ -360,10 +355,116 @@ function ItemDetailPage() {
               <Button
                 onClick={() => raiseMutation.mutate()}
                 loading={raiseMutation.isPending}
-                disabled={!qty || Number(qty) <= 0 || added}
+                disabled={
+                  !readBoxesAndPieces(qtyBoxes, qtyPieces, item.piecesPerBox) ||
+                  added
+                }
               >
                 Send this enquiry now
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Client refinement, 27 Oct 2026 — shows automatically whenever the item actually
+            has damaged/display-bay stock, silent otherwise. Client request, 2 Nov 2026 --
+            moved below the regular "Enquire about this item" form so the dealer sees the
+            normal enquiry path first and this as a secondary, separate option after it. */}
+        {excludedStockQuery.data && excludedStockQuery.data.length > 0 && (
+          <Card>
+            <CardContent className="space-y-2">
+              <p className="text-xs font-medium text-zinc-500">
+                Also available, not counted above:
+              </p>
+              <div className="space-y-2">
+                {excludedStockQuery.data.map((row) => {
+                  const orderable = ORDERABLE_EXCLUDED_BAY_TYPES.has(
+                    row.bayType,
+                  );
+                  const rowQty = damagedQty[row.bayType] ?? "";
+                  return (
+                    <div
+                      key={row.bayType}
+                      className="space-y-1 text-xs text-zinc-600"
+                    >
+                      <div className="flex justify-between">
+                        <span>
+                          {EXCLUDED_BAY_LABELS[row.bayType] ?? row.bayType}
+                        </span>
+                        <span className="font-medium text-zinc-900">
+                          {formatBoxQty(row.boxes, item.piecesPerBox)}
+                        </span>
+                      </div>
+                      {orderable &&
+                        (() => {
+                          const rowPieces = damagedPieces[row.bayType] ?? "";
+                          const combined = readBoxesAndPieces(
+                            rowQty,
+                            rowPieces,
+                            item.piecesPerBox,
+                          );
+                          return (
+                            <div className="flex items-center gap-2">
+                              <BoxesPiecesFields
+                                boxes={rowQty}
+                                pieces={rowPieces}
+                                onBoxesChange={(v) =>
+                                  setDamagedQty((prev) => ({
+                                    ...prev,
+                                    [row.bayType]: v,
+                                  }))
+                                }
+                                onPiecesChange={(v) =>
+                                  setDamagedPieces((prev) => ({
+                                    ...prev,
+                                    [row.bayType]: v,
+                                  }))
+                                }
+                                piecesPerBox={item.piecesPerBox}
+                                className="min-w-0 flex-1"
+                                inputClassName="h-8 text-xs"
+                              />
+                              <Button
+                                variant="outline"
+                                className="h-8 w-auto shrink-0 px-2.5 text-xs"
+                                disabled={!combined}
+                                onClick={() => {
+                                  if (!combined) return;
+                                  addToEnquiryList({
+                                    code: item.code,
+                                    name: item.name,
+                                    qty: combined.boxes,
+                                    pieces: combined.pieces || undefined,
+                                    damagedStock: true,
+                                    images: item.images,
+                                    piecesPerBox: item.piecesPerBox,
+                                  });
+                                  setDamagedQty((prev) => ({
+                                    ...prev,
+                                    [row.bayType]: "",
+                                  }));
+                                  setDamagedPieces((prev) => ({
+                                    ...prev,
+                                    [row.bayType]: "",
+                                  }));
+                                  setDamagedAdded((prev) => ({
+                                    ...prev,
+                                    [row.bayType]: true,
+                                  }));
+                                }}
+                              >
+                                Add to order
+                              </Button>
+                              {damagedAdded[row.bayType] && (
+                                <span className="text-emerald-700">Added</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -398,8 +499,14 @@ function ItemDetailPage() {
                             </span>
                           )}
                         </span>
-                        <Badge tone={alt.availableStockQty > 0 ? "success" : "danger"}>
-                          {alt.availableStockQty > 0 ? "In stock" : "Out of stock"}
+                        <Badge
+                          tone={
+                            alt.availableStockQty > 0 ? "success" : "danger"
+                          }
+                        >
+                          {alt.availableStockQty > 0
+                            ? "In stock"
+                            : "Out of stock"}
                         </Badge>
                       </div>
                     </Link>
@@ -411,28 +518,75 @@ function ItemDetailPage() {
 
         {raisedInquiry && inStock && (
           <Card>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               <p className="text-sm text-zinc-700">
                 Your enquiry <strong>{raisedInquiry.number}</strong> has been
                 logged.{" "}
-                {item.orderable
-                  ? "Pacific will send you a quotation — you can accept it there to place the order."
-                  : "This item isn't yet set up for ordering on your account — our team will follow up to get it added and quote you."}
+                {!item.orderable
+                  ? "This item isn't yet set up for ordering on your account — our team will follow up to get it added and quote you."
+                  : askForQuotationMutation.isSuccess
+                    ? "Pacific will send you a quotation — you can accept it there to place the order."
+                    : "Create an order now, or ask Pacific for a quotation first."}
               </p>
+
+              {/* Client request, 2 Nov 2026 -- once a quotation's been asked for, Pacific is
+                  now the one pricing this order; self-service "Create order" no longer applies
+                  to this enquiry, so it's hidden instead of staying alongside the quotation
+                  request. */}
+              {item.orderable && !askForQuotationMutation.isSuccess && (
+                <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
+                  <label className="block text-xs font-medium text-zinc-700">
+                    Your PO number
+                    <Input
+                      value={orderPo}
+                      onChange={(e) => setOrderPo(e.target.value)}
+                      className="mt-1 h-9 text-sm"
+                      placeholder="PO-2026-001"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-zinc-700">
+                    Expected dispatch date
+                    <Input
+                      type="date"
+                      value={orderDispatchDate}
+                      onChange={(e) => setOrderDispatchDate(e.target.value)}
+                      className="mt-1 h-9 text-sm"
+                    />
+                  </label>
+                  {orderError && (
+                    <p className="text-sm text-red-600">{orderError}</p>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => createOrderMutation.mutate()}
+                    loading={createOrderMutation.isPending}
+                    disabled={!orderPo.trim() || !orderDispatchDate}
+                  >
+                    Create order
+                  </Button>
+                </div>
+              )}
+
               {askForQuotationMutation.isSuccess ? (
                 <p className="text-sm font-medium text-emerald-600">
                   Quotation requested — Pacific will follow up.
                 </p>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={() => askForQuotationMutation.mutate()}
-                  disabled={askForQuotationMutation.isPending}
-                >
-                  {askForQuotationMutation.isPending
-                    ? "Requesting…"
-                    : "Ask for quotation"}
-                </Button>
+                // Client request, 2 Nov 2026 (mirrors the Create order guard above) -- once
+                // an order's been created directly, there's nothing left to quote.
+                !createOrderMutation.isSuccess && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => askForQuotationMutation.mutate()}
+                    disabled={askForQuotationMutation.isPending}
+                  >
+                    {askForQuotationMutation.isPending
+                      ? "Requesting…"
+                      : "Ask for quotation"}
+                  </Button>
+                )
               )}
               <Link
                 to="/inquiries"

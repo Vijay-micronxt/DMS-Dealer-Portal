@@ -77,6 +77,8 @@ export type Inquiry = {
   productId: string | null;
   /** The item's name, when it has one different from its code. */
   productName?: string | null;
+  /** Client request, 2 Nov 2026 -- empty for a Custom Style enquiry (no item). */
+  images?: ProductImage[];
   /** ISS-2026-00636 -- the style name typed through WhatsApp's "Custom Style"
    * option, when the enquiry has no catalog item; null otherwise. */
   requestedStyle: string | null;
@@ -85,6 +87,15 @@ export type Inquiry = {
    * enquiry (no item) or when nothing resolves yet; never 0. */
   price: number | null;
   qty: number;
+  /** Client request, 2 Nov 2026 -- the qty/unit as actually entered, when it wasn't a
+   * plain Box qty; null otherwise. Same fields/convention pacific-tileflow's Order/
+   * Quotation lines already expose. When enteredBoxes is also set, this (enteredUom
+   * is then always "Pcs") is specifically the Pcs component of a combined Boxes+Pcs
+   * entry -- show both together ("50 Box 5 Pcs"), never enteredQty alone, which
+   * would read as "5 Pcs" and drop the Boxes component entirely. */
+  enteredQty?: number | null;
+  enteredUom?: string | null;
+  enteredBoxes?: number | null;
   weightPerBoxKg: number | null;
   totalWeightKg: number | null;
   status: string;
