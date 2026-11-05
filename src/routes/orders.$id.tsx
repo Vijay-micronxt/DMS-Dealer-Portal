@@ -194,7 +194,24 @@ function OrderDetailPage() {
                 >
                   <div>
                     <p className="text-zinc-900">{line.itemCode}</p>
-                    <p className="text-xs text-zinc-500">{line.qty} boxes</p>
+                    <p className="text-xs text-zinc-500">
+                      {line.qty} boxes
+                      {/* ISS-2026-00712 -- shown so a dealer who picked a specific
+                          batch can see it stuck through to the order. */}
+                      {line.preferredBatchNo && (
+                        <> · Batch {line.preferredBatchNo}</>
+                      )}
+                      {/* ISS-2026-00710 -- only shown once a line has actually been
+                          split across more than one invoice. */}
+                      {(line.qtyInvoiced ?? 0) > 0 &&
+                        (line.qtyPending ?? 0) > 0 && (
+                          <span className="text-amber-700">
+                            {" "}
+                            · {line.qtyInvoiced} invoiced, {line.qtyPending}{" "}
+                            pending
+                          </span>
+                        )}
+                    </p>
                   </div>
                   <p className="font-medium text-zinc-900">
                     {formatCurrency(line.amount ?? line.rate * line.qty)}
@@ -232,6 +249,40 @@ function OrderDetailPage() {
             </dl>
           </CardContent>
         </Card>
+
+        {/* ISS-2026-00710 -- read-only here: Pacific raises invoices, dealers see
+            them. billingStatus/invoices are both absent on a backend that predates
+            partial invoicing, so this card simply doesn't render then. */}
+        {order.invoices && order.invoices.length > 0 && (
+          <Card>
+            <CardContent className="space-y-2">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                Invoices
+                {order.billingStatus === "Partly Billed" && (
+                  <Badge tone="warning">Partly billed</Badge>
+                )}
+              </h2>
+              <div className="divide-y divide-zinc-100">
+                {order.invoices.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className="flex items-center justify-between py-2 text-sm"
+                  >
+                    <div>
+                      <p className="text-zinc-900">{inv.id}</p>
+                      <p className="text-xs text-zinc-500">
+                        {formatDate(inv.date)} · {inv.status}
+                      </p>
+                    </div>
+                    <p className="font-medium text-zinc-900">
+                      {formatCurrency(inv.grandTotal)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="space-y-2">

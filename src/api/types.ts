@@ -118,6 +118,10 @@ export type Inquiry = {
   /** ISS-2026-00678 -- raised against damaged/insurance-claim bay stock specifically
    * (see the item page's damaged-stock section), not regular inventory. */
   damagedStock: boolean;
+  /** ISS-2026-00712 -- the dealer's own batch choice at enquiry time, if any; null/
+   * absent ("Auto") means it's left to the warehouse at dispatch time. Carried onto
+   * the resulting Sales Order line if/when convertToOrder runs. */
+  preferredBatchNo?: string | null;
   /** The quotation Pacific prepared for this enquiry -- where the dealer sees the price and
    * accepts it to place the order. null until one is sent. */
   linkedQuotation: string | null;
@@ -155,6 +159,10 @@ export type QuotationLine = {
   deliveryDate: string | null;
   weightPerBoxKg: number | null;
   totalWeightKg: number | null;
+  /** ISS-2026-00712 -- the dealer's own batch choice, carried from the source Inquiry
+   * when this quotation was built from one; null/absent ("Auto") means dispatch draws
+   * whichever batch(es) are on hand once this becomes a Sales Order. */
+  preferredBatchNo?: string | null;
 };
 
 export type QuotationTax = {
@@ -222,12 +230,35 @@ export type InvoiceDetail = Invoice & {
 };
 
 export type OrderLine = {
+  /** ISS-2026-00710 -- this line's own Sales Order Item row name (so_detail). Absent
+   * on a backend that predates partial invoicing. */
+  lineId?: string;
   itemCode: string;
   qty: number;
+  /** ISS-2026-00710 -- qty already billed / still open on this line, summed across
+   * every live invoice against this order. Absent on a backend that predates this. */
+  qtyInvoiced?: number;
+  qtyPending?: number;
   rate: number;
   /** After any line discount -- what this line actually costs. rate × qty ignores the discount. */
   amount?: number;
   weightPerBoxKg: number | null;
+  totalWeightKg: number | null;
+  /** ISS-2026-00712 -- the batch this line was ordered against, if the dealer picked
+   * one instead of leaving it on Auto. */
+  preferredBatchNo?: string | null;
+};
+
+/** BRD Figure 4's Sales Invoice step -- empty/absent until Pacific raises one against
+ * this order. ISS-2026-00710 -- an order can now carry more than one, if it was
+ * invoiced in parts. Read-only here: dealers see invoices raised against their orders,
+ * they don't raise them. */
+export type OrderInvoice = {
+  id: string;
+  date: string;
+  grandTotal: number;
+  outstandingAmount: number;
+  status: string;
   totalWeightKg: number | null;
 };
 
@@ -257,6 +288,11 @@ export type Order = {
   expectedDispatch: string | null;
   vehicle: string | null;
   history: OrderStageEvent[];
+  /** ISS-2026-00710 -- [] until Pacific raises the first invoice against this order;
+   * absent on a backend that predates this. */
+  invoices?: OrderInvoice[];
+  /** Native ERPNext field. Absent on a backend that predates partial invoicing. */
+  billingStatus?: "Not Billed" | "Partly Billed" | "Fully Billed" | "Closed";
 };
 
 export type DealerProfile = {
