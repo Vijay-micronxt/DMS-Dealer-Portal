@@ -2,6 +2,11 @@ import { authedCall } from "@/lib/auth";
 import type { CatalogItem, Paginated } from "@/api/types";
 
 export function getCatalog(params: {
+  /** Matches item name, code or colour/design attributes, OR a batch number with
+   * on-hand stock containing this text (ISS-2026-00712, folded into this one box
+   * on client request 4 Nov 2026 -- two separate search boxes read as one too
+   * many). "RUSTIC" finds items named Rustic as well as items only identifiable
+   * by a batch called RUSTIC-04. */
   search?: string | undefined;
   category?: string | undefined;
   color?: string | undefined;

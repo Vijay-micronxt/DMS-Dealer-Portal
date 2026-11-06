@@ -97,6 +97,9 @@ function CatalogPage() {
     queryFn: ({ pageParam }) =>
       getCatalog({
         scope,
+        // ISS-2026-00712 -- this one box now also matches a batch number, folded
+        // into get_catalog's own search handling server-side (client request, 4
+        // Nov 2026: two separate search boxes read as one too many).
         search: debounced || undefined,
         limit: PAGE_SIZE,
         offset: pageParam,
@@ -167,7 +170,7 @@ function CatalogPage() {
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <Input
-            placeholder="Search item name or your code"
+            placeholder="Search item name, your code or batch number"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="pl-10"
@@ -199,7 +202,7 @@ function CatalogPage() {
             ) : (
               <p className="py-10 text-center text-sm text-zinc-500">
                 {query
-                  ? "No items match that search or code."
+                  ? "No items match that search, code or batch."
                   : scope === "assigned"
                     ? "No items in your catalogue yet."
                     : "No other items to show."}

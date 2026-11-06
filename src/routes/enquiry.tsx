@@ -53,6 +53,7 @@ function EnquiryListPage() {
           qty: l.pieces ?? 0,
           damagedStock: l.damagedStock,
           enteredBoxes: l.qty,
+          preferredBatchNo: l.preferredBatchNo,
         })),
         remarks: remarks.trim() || undefined,
       }),
@@ -115,7 +116,15 @@ function EnquiryListPage() {
       ),
   });
 
-  const invalid = lines.some((l) => !(l.qty > 0));
+  // ISS-2026-00712, client report 5 Nov 2026 -- a line tied to a batch can be
+  // edited past what that batch actually has right here on the list page; this
+  // catches it before Send instead of letting a failed round-trip be the first
+  // warning (the item page's own picker already prevents it going in, but a
+  // line can still be bumped up after the fact).
+  const overBatchLine = lines.find(
+    (l) => l.batchMaxBoxes !== undefined && l.qty > l.batchMaxBoxes,
+  );
+  const invalid = lines.some((l) => !(l.qty > 0)) || !!overBatchLine;
 
   return (
     <AppShell>
@@ -236,9 +245,10 @@ function EnquiryListPage() {
             <div className="space-y-3">
               {lines.map((line) => (
                 <Card
-                  key={`${line.code}-${line.damagedStock ? "damaged" : "regular"}`}
+                  key={`${line.code}-${line.damagedStock ? "damaged" : "regular"}-${line.preferredBatchNo ?? "auto"}`}
                 >
-                  <CardContent className="flex items-center gap-3">
+                  <CardContent className="space-y-1.5">
+                  <div className="flex items-center gap-3">
                     <ClickableThumbnail
                       images={line.images ?? []}
                       className="h-12 w-12"
@@ -255,7 +265,14 @@ function EnquiryListPage() {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-zinc-500">{line.code}</p>
+                      <p className="text-xs text-zinc-500">
+                        {line.code}
+                        {/* ISS-2026-00712 -- shown so a dealer who picked a specific
+                            batch on the item page can see it stuck, before sending. */}
+                        {line.preferredBatchNo && (
+                          <> · Batch {line.preferredBatchNo}</>
+                        )}
+                      </p>
                     </div>
                     <BoxesPiecesFields
                       boxes={line.qty ? String(line.qty) : ""}
@@ -265,6 +282,7 @@ function EnquiryListPage() {
                           line.code,
                           Number(v) || 0,
                           line.damagedStock,
+                          line.preferredBatchNo,
                         )
                       }
                       onPiecesChange={(v) =>
@@ -272,6 +290,7 @@ function EnquiryListPage() {
                           line.code,
                           Number(v) || 0,
                           line.damagedStock,
+                          line.preferredBatchNo,
                         )
                       }
                       piecesPerBox={line.piecesPerBox}
@@ -281,12 +300,27 @@ function EnquiryListPage() {
                     <button
                       aria-label={`Remove ${line.name}`}
                       onClick={() =>
-                        removeFromEnquiryList(line.code, line.damagedStock)
+                        removeFromEnquiryList(
+                          line.code,
+                          line.damagedStock,
+                          line.preferredBatchNo,
+                        )
                       }
                       className="shrink-0 p-1 text-zinc-400"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
+                  </div>
+                  {/* ISS-2026-00712, client report 5 Nov 2026 -- a batch-tied line
+                      edited past that batch's own on-hand qty right here, caught
+                      before Send rather than only on a failed round-trip. */}
+                  {line.batchMaxBoxes !== undefined &&
+                    line.qty > line.batchMaxBoxes && (
+                      <p className="text-xs text-red-600">
+                        {line.preferredBatchNo} only has {line.batchMaxBoxes}{" "}
+                        boxes — lower the qty or remove this line.
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               ))}

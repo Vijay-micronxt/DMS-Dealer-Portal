@@ -184,6 +184,12 @@ function EnquiryDetailPage() {
                             : `${item.enteredQty} ${item.enteredUom}`}
                         </>
                       )}
+                      {/* ISS-2026-00712, client report 5 Nov 2026 -- the dealer's
+                          batch choice wasn't shown anywhere once the enquiry was
+                          sent, only on the cart before Send. */}
+                      {item.preferredBatchNo && (
+                        <> · Batch {item.preferredBatchNo}</>
+                      )}
                     </p>
                     {item.customerPo && (
                       <p className="text-xs text-zinc-500">

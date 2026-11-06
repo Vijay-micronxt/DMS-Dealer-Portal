@@ -15,6 +15,9 @@ export function raiseInquiry(params: {
   /** The Boxes component of a combined Boxes+Pcs entry; omitted for a plain,
    * boxes-only enquiry. */
   enteredBoxes?: number | undefined;
+  /** ISS-2026-00712 -- the dealer's own batch choice; omitted/undefined leaves it
+   * on Auto (the warehouse decides at dispatch, largest lot first). */
+  preferredBatchNo?: string | undefined;
 }): Promise<Inquiry> {
   return authedCall("dms_erp.sales.dealer_portal_api.raise_inquiry", {
     method: "POST",
@@ -24,6 +27,7 @@ export function raiseInquiry(params: {
       remarks: params.remarks,
       damaged_stock: params.damagedStock,
       entered_boxes: params.enteredBoxes,
+      preferred_batch_no: params.preferredBatchNo,
     },
   });
 }
@@ -37,6 +41,7 @@ export function raiseInquiries(params: {
     qty: number;
     damagedStock?: boolean | undefined;
     enteredBoxes?: number | undefined;
+    preferredBatchNo?: string | undefined;
   }[];
   remarks?: string | undefined;
 }): Promise<{ requestGroup: string; items: Inquiry[] }> {

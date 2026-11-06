@@ -33,6 +33,20 @@ export type EnquiryLine = {
    * knows whether to offer a Pcs field for this line at all -- an item with no
    * pieces-per-box figure can only ever be a plain box quantity. */
   piecesPerBox?: number | null | undefined;
+  /** ISS-2026-00712 -- the dealer's own batch choice for this line, picked on the
+   * item's own page; undefined ("Auto") leaves it to the warehouse at dispatch
+   * time. Two lines for the same item targeting different batches stay separate
+   * rows, same reason damagedStock lines do (merging their qty would blur a
+   * batch-10 request into a batch-20 one). */
+  preferredBatchNo?: string | undefined;
+  /** ISS-2026-00712, client report 5 Nov 2026 -- that batch's own on-hand qty,
+   * captured at add-time (same snapshot pattern as images/piecesPerBox above) so
+   * this page can warn immediately if `qty` is later edited past it, instead of
+   * only finding out from a failed Send -- real stock can still move between
+   * now and Send, so the backend's own check at raise_inquiry time stays the
+   * actual source of truth; this is just an earlier, good-enough warning.
+   * undefined for a line with no preferredBatchNo (Auto -- nothing to cap against). */
+  batchMaxBoxes?: number | undefined;
 };
 
 const KEY = "dms-portal-enquiry-list";
@@ -74,7 +88,10 @@ function commit(next: EnquiryLine[]) {
  * line and a regular line for the same item code stay separate rows, never merged. */
 export function addToEnquiryList(line: EnquiryLine) {
   const existing = lines.find(
-    (l) => l.code === line.code && !!l.damagedStock === !!line.damagedStock,
+    (l) =>
+      l.code === line.code &&
+      !!l.damagedStock === !!line.damagedStock &&
+      (l.preferredBatchNo ?? null) === (line.preferredBatchNo ?? null),
   );
   commit(
     existing
@@ -91,16 +108,28 @@ export function addToEnquiryList(line: EnquiryLine) {
   );
 }
 
+function sameLine(
+  l: EnquiryLine,
+  code: string,
+  damagedStock?: boolean,
+  preferredBatchNo?: string,
+) {
+  return (
+    l.code === code &&
+    !!l.damagedStock === !!damagedStock &&
+    (l.preferredBatchNo ?? null) === (preferredBatchNo ?? null)
+  );
+}
+
 export function setEnquiryQty(
   code: string,
   qty: number,
   damagedStock?: boolean,
+  preferredBatchNo?: string,
 ) {
   commit(
     lines.map((l) =>
-      l.code === code && !!l.damagedStock === !!damagedStock
-        ? { ...l, qty }
-        : l,
+      sameLine(l, code, damagedStock, preferredBatchNo) ? { ...l, qty } : l,
     ),
   );
 }
@@ -109,21 +138,24 @@ export function setEnquiryPieces(
   code: string,
   pieces: number,
   damagedStock?: boolean,
+  preferredBatchNo?: string,
 ) {
   commit(
     lines.map((l) =>
-      l.code === code && !!l.damagedStock === !!damagedStock
+      sameLine(l, code, damagedStock, preferredBatchNo)
         ? { ...l, pieces: pieces || undefined }
         : l,
     ),
   );
 }
 
-export function removeFromEnquiryList(code: string, damagedStock?: boolean) {
+export function removeFromEnquiryList(
+  code: string,
+  damagedStock?: boolean,
+  preferredBatchNo?: string,
+) {
   commit(
-    lines.filter(
-      (l) => !(l.code === code && !!l.damagedStock === !!damagedStock),
-    ),
+    lines.filter((l) => !sameLine(l, code, damagedStock, preferredBatchNo)),
   );
 }
 

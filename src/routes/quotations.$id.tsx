@@ -121,6 +121,9 @@ function QuotationDetailPage() {
                       {l.itemCode} · {l.qty} boxes × {formatCurrency(l.rate)}
                       {l.discountPercentage > 0 &&
                         ` (${l.discountPercentage}% off ${formatCurrency(l.priceListRate)})`}
+                      {/* ISS-2026-00712 -- the dealer's own batch choice, carried
+                          over from the enquiry this quotation was built from. */}
+                      {l.preferredBatchNo && <> · Batch {l.preferredBatchNo}</>}
                     </p>
                     {l.deliveryDate && (
                       <p className="text-xs text-zinc-500">

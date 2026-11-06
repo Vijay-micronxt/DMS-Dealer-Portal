@@ -23,7 +23,7 @@ import {
   requestQuotation,
 } from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { Inquiry } from "@/api/types";
 
 export const Route = createFileRoute("/catalog/$item")({
@@ -55,6 +55,13 @@ function ItemDetailPage() {
   const [qtyBoxes, setQtyBoxes] = React.useState("");
   const [qtyPieces, setQtyPieces] = React.useState("");
   const [remarks, setRemarks] = React.useState("");
+  // ISS-2026-00712, client refinement 4 Nov 2026 -- a dealer can split the
+  // entered qty across more than one batch, not just pick a single one. Empty
+  // map means Auto (left to the warehouse at dispatch time, largest on-hand
+  // batch first); keyed by batch number, value is that batch's share as typed.
+  const [batchAlloc, setBatchAlloc] = React.useState<Record<string, string>>(
+    {},
+  );
   const [raisedInquiry, setRaisedInquiry] = React.useState<Inquiry | null>(
     null,
   );
@@ -85,11 +92,20 @@ function ItemDetailPage() {
         itemQuery.data?.piecesPerBox,
       );
       if (!combined) throw new Error("Enter a quantity.");
+      // Sending one enquiry directly only ever carries one batch (or none, for
+      // Auto) -- a split across several batches goes through "Add to enquiry
+      // list" instead (each batch becomes its own line), see canSendDirectly.
+      // Only a positive-qty pick counts; a batch tapped but still sitting at 0
+      // isn't really "the batch" the dealer meant to use.
+      const [singleBatch] = Object.entries(batchAlloc)
+        .filter(([, v]) => (Number(v) || 0) > 0)
+        .map(([bn]) => bn);
       return raiseInquiry({
         item: itemCode,
         qty: combined.pieces,
         remarks: remarks || undefined,
         enteredBoxes: combined.boxes,
+        preferredBatchNo: singleBatch || undefined,
       });
     },
     onSuccess: (inquiry) => {
@@ -165,6 +181,80 @@ function ItemDetailPage() {
 
   const item = itemQuery.data;
   const inStock = item.availableStockQty > 0 && item.isSellable;
+  const enteredCombined = readBoxesAndPieces(
+    qtyBoxes,
+    qtyPieces,
+    item.piecesPerBox,
+  );
+  const enteredBoxes = enteredCombined?.boxes ?? 0;
+
+  // ISS-2026-00712, client refinement 4 Nov 2026 -- the batch picker only
+  // appears once a qty is entered, and lets a dealer split it across more than
+  // one batch until it adds up. A batch stays "picked" (key present in
+  // batchAlloc) even while its own qty is 0 -- e.g. the moment it's tapped
+  // with no room left -- so tapping never silently fails; allocatedTotal/
+  // submittableEntries are what actually drive validation and submission.
+  const pickedBatches = Object.keys(batchAlloc);
+  const allocatedTotal = Object.values(batchAlloc).reduce(
+    (sum, v) => sum + (Number(v) || 0),
+    0,
+  );
+  const hasAllocations = pickedBatches.length > 0;
+  // Every input clamps itself to what's actually still available (see
+  // setBatchQty/toggleBatchPick below), so going over is never possible --
+  // "complete" just means the picks add up to the full qty, nothing left over.
+  const allocationComplete = !hasAllocations || allocatedTotal === enteredBoxes;
+  const submittableEntries = Object.entries(batchAlloc).filter(
+    ([, v]) => (Number(v) || 0) > 0,
+  );
+  // Sending one enquiry directly (raiseInquiry) only ever carries a single
+  // preferredBatchNo; a real split needs one line per batch, which only "Add
+  // to enquiry list" can build -- see raiseMutation/the Add button below.
+  const canSendDirectly = submittableEntries.length <= 1;
+  // Client report, 4 Nov 2026 -- a Pcs remainder has no batch of its own to
+  // belong to (it's a top-up of less than one box), so when it used to ride
+  // on the first split line, that line's own batch needed the Pcs-rounded-up
+  // extra box too -- failing a batch that genuinely had enough for the plain
+  // Boxes qty, just not boxes+pieces together. Rather than guess which batch
+  // should absorb it, a Pcs remainder is only allowed with Auto or a single
+  // picked batch; blocked outright once a dealer has actually split across
+  // more than one.
+  const pieceBatchConflict =
+    (enteredCombined?.pieces ?? 0) > 0 && submittableEntries.length > 1;
+
+  // How much of `batchNumber`'s own qty can still grow, given what every
+  // *other* picked batch already uses -- shared by both the initial tap-fill
+  // and manual edits, so neither can ever push the total past enteredBoxes.
+  function roomFor(batchNumber: string, batchBoxes: number, alloc: Record<string, string>) {
+    const usedByOthers = Object.entries(alloc)
+      .filter(([bn]) => bn !== batchNumber)
+      .reduce((s, [, v]) => s + (Number(v) || 0), 0);
+    return Math.min(batchBoxes, Math.max(enteredBoxes - usedByOthers, 0));
+  }
+
+  function toggleBatchPick(batch: { batchNumber: string; boxes: number }) {
+    setBatchAlloc((prev) => {
+      if (prev[batch.batchNumber] !== undefined) {
+        const next = { ...prev };
+        delete next[batch.batchNumber];
+        return next;
+      }
+      // Tapping a batch once everything else is already fully allocated picks
+      // it with 0, not the full batch -- it stays selected and editable, the
+      // dealer just needs to free up room elsewhere first (lower another
+      // picked batch's own qty) before this one can actually take any.
+      const fill = roomFor(batch.batchNumber, batch.boxes, prev);
+      return { ...prev, [batch.batchNumber]: String(fill) };
+    });
+  }
+
+  function setBatchQty(batchNumber: string, raw: string, batchBoxes: number) {
+    setBatchAlloc((prev) => {
+      const cap = roomFor(batchNumber, batchBoxes, prev);
+      const n = raw === "" ? 0 : Math.max(0, Math.min(Number(raw) || 0, cap));
+      return { ...prev, [batchNumber]: String(n) };
+    });
+  }
 
   return (
     <AppShell>
@@ -263,6 +353,10 @@ function ItemDetailPage() {
                 ))}
             </dl>
 
+            {/* Read-only reference here -- the pickable version (ISS-2026-00712)
+                is under Quantity below, once a qty is actually entered; showing
+                it twice, before the dealer has even said how much they want,
+                was the "not friendly" complaint (client, 4 Nov 2026). */}
             {item.topBatches.length > 0 && (
               <div>
                 <p className="mb-1 text-xs font-medium text-zinc-400">
@@ -309,6 +403,125 @@ function ItemDetailPage() {
                   className="mt-1.5"
                 />
               </label>
+              {/* ISS-2026-00712, client refinement 4 Nov 2026 -- only appears
+                  once a qty is actually entered, and only when there's more
+                  than one batch to choose between. Tap batches until
+                  "allocated" reaches the entered qty -- each tap fills as much
+                  of the remainder as that batch can cover, largest-first same
+                  as Auto would, but editable per batch. Every qty here
+                  self-caps to whatever's still actually available (roomFor),
+                  so going over is never possible -- lowering one batch's own
+                  qty frees that room straight back up for the others, letting
+                  a dealer re-tap/re-type a higher number into them. */}
+              {enteredBoxes > 0 && item.topBatches.length > 1 && (
+                <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
+                  <p className="text-xs font-medium text-zinc-700">
+                    Pick batch(es) for these {enteredBoxes} boxes (optional)
+                  </p>
+                  <div className="space-y-1">
+                    {item.topBatches.map((b) => {
+                      const picked = batchAlloc[b.batchNumber] !== undefined;
+                      // ISS-2026-00712, client refinement 4 Nov 2026 -- once the
+                      // qty is already fully covered by what's picked so far, an
+                      // unpicked batch has nothing left to take and is no longer
+                      // tappable (greyed out, "qty covered" shown) -- tapping it
+                      // used to silently add a dead 0-qty row, which read as
+                      // broken rather than "there's nothing left to give you."
+                      // Deselecting an already-picked batch always stays
+                      // allowed -- that's exactly how room gets freed up again.
+                      const pickable = picked || allocatedTotal < enteredBoxes;
+                      return (
+                        <div
+                          key={b.batchNumber}
+                          className={cn(
+                            "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-colors",
+                            picked
+                              ? "border-zinc-900 bg-zinc-900 text-white"
+                              : pickable
+                                ? "border-zinc-200 bg-white text-zinc-700"
+                                : "border-zinc-200 bg-zinc-100 text-zinc-500",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            disabled={!pickable}
+                            onClick={() => toggleBatchPick(b)}
+                            className={cn(
+                              "flex-1 text-left",
+                              !pickable && "cursor-not-allowed",
+                            )}
+                          >
+                            <span className="font-medium">
+                              {b.batchNumber}
+                              {picked && " ✓"}
+                            </span>
+                            <span
+                              className={cn(
+                                "block text-[11px]",
+                                picked
+                                  ? "text-zinc-300"
+                                  : pickable
+                                    ? "text-zinc-500"
+                                    : "text-zinc-500",
+                              )}
+                            >
+                              {pickable
+                                ? `${formatBoxQty(b.boxes, item.piecesPerBox)} available`
+                                : "Qty already covered — remove a pick above to use this one"}
+                            </span>
+                          </button>
+                          {picked && (
+                            <Input
+                              type="number"
+                              min={0}
+                              max={b.boxes}
+                              value={batchAlloc[b.batchNumber]}
+                              onChange={(e) =>
+                                setBatchQty(b.batchNumber, e.target.value, b.boxes)
+                              }
+                              className="h-8 w-16 shrink-0 bg-white text-right text-xs text-zinc-900"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {hasAllocations && (
+                    <p
+                      className={cn(
+                        "text-xs",
+                        allocationComplete ? "text-emerald-700" : "text-amber-700",
+                      )}
+                    >
+                      {allocatedTotal} of {enteredBoxes} boxes allocated
+                      {allocatedTotal !== enteredBoxes &&
+                        ` — ${enteredBoxes - allocatedTotal} more to go`}
+                      .{" "}
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => setBatchAlloc({})}
+                      >
+                        Reset to Auto
+                      </button>
+                    </p>
+                  )}
+                  {pieceBatchConflict ? (
+                    <p className="text-xs text-red-600">
+                      Pcs can't be split across batches — clear the Pcs field
+                      above, or pick just one batch for this line.
+                    </p>
+                  ) : (
+                    submittableEntries.length > 1 && (
+                      <p className="text-xs text-zinc-500">
+                        Split across {submittableEntries.length} batches — use
+                        "Add to enquiry list" below, then send everything
+                        together from your enquiry list.
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
               <label className="block text-sm font-medium text-zinc-700">
                 Remarks (optional)
                 <Input
@@ -332,22 +545,49 @@ function ItemDetailPage() {
                     item.piecesPerBox,
                   );
                   if (!combined) return;
-                  addToEnquiryList({
-                    code: item.code,
-                    name: item.name,
-                    qty: combined.boxes,
-                    pieces: combined.pieces || undefined,
-                    images: item.images,
-                    piecesPerBox: item.piecesPerBox,
-                  });
+                  if (hasAllocations) {
+                    // ISS-2026-00712 -- one line per batch, each carrying its own
+                    // share of the qty. The Pcs component (if any) rides on the
+                    // first line only -- safe here because pieceBatchConflict
+                    // (see above, and the disabled check below) already blocks
+                    // submission whenever there's a Pcs remainder AND more than
+                    // one batch, the one case where "which line gets it" would
+                    // actually matter.
+                    submittableEntries.forEach(([batchNumber, qtyStr], i) => {
+                      addToEnquiryList({
+                        code: item.code,
+                        name: item.name,
+                        qty: Number(qtyStr),
+                        pieces: i === 0 ? combined.pieces || undefined : undefined,
+                        images: item.images,
+                        piecesPerBox: item.piecesPerBox,
+                        preferredBatchNo: batchNumber,
+                        batchMaxBoxes: item.topBatches.find(
+                          (b) => b.batchNumber === batchNumber,
+                        )?.boxes,
+                      });
+                    });
+                  } else {
+                    addToEnquiryList({
+                      code: item.code,
+                      name: item.name,
+                      qty: combined.boxes,
+                      pieces: combined.pieces || undefined,
+                      images: item.images,
+                      piecesPerBox: item.piecesPerBox,
+                    });
+                  }
                   setQtyBoxes("");
                   setQtyPieces("");
+                  setBatchAlloc({});
                   setAdded(true);
                 }}
                 disabled={
                   !readBoxesAndPieces(qtyBoxes, qtyPieces, item.piecesPerBox) ||
                   added ||
-                  raiseMutation.isPending
+                  raiseMutation.isPending ||
+                  !allocationComplete ||
+                  pieceBatchConflict
                 }
               >
                 Add to enquiry list
@@ -357,7 +597,10 @@ function ItemDetailPage() {
                 loading={raiseMutation.isPending}
                 disabled={
                   !readBoxesAndPieces(qtyBoxes, qtyPieces, item.piecesPerBox) ||
-                  added
+                  added ||
+                  !allocationComplete ||
+                  !canSendDirectly ||
+                  pieceBatchConflict
                 }
               >
                 Send this enquiry now
