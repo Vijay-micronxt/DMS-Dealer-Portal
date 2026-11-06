@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ItemThumbnail } from "@/components/ui/image-gallery";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { exportMyCatalog, getCatalog, resolveCode } from "@/api/catalog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -253,6 +253,8 @@ function ItemCard({
     designAttribute2?: string | null;
     dealerCode: string | null;
     availableStockQty: number;
+    inTransitQty?: number | null;
+    inTransitEta?: string | null;
     piecesPerBox?: number | null;
     status: string;
     images: ProductImage[];
@@ -311,6 +313,14 @@ function ItemCard({
               ? `${formatBoxQty(item.availableStockQty, item.piecesPerBox)} in stock`
               : "Out of stock"}
           </Badge>
+          {/* BRD C.3.2 -- "Transit Warehouse": not real stock, just visibility that more is
+              already on the way, so a 0-in-stock item doesn't read as a dead end. */}
+          {!!item.inTransitQty && (
+            <p className="text-right text-[11px] text-zinc-500">
+              {item.inTransitQty} in transit
+              {item.inTransitEta ? ` ~${formatDate(item.inTransitEta)}` : ""}
+            </p>
+          )}
           {!item.orderable && (
             // ISS-2026-00644 -- this item isn't in your Dealer Catalog assignment yet;
             // it can still be enquired on (Item detail's Raise Enquiry), just not booked.

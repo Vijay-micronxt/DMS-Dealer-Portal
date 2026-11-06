@@ -48,6 +48,11 @@ export type CatalogItem = {
    * total is never sent to a dealer session. See getExcludedStock for the "View more" breakdown
    * of what this excludes. */
   availableStockQty: number;
+  /** BRD C.3.2 — "Transit Warehouse": not real stock, never folded into availableStockQty
+   * above — just visibility into what's already on an open, non-drop-ship Purchase Order for
+   * this item but hasn't arrived yet. null/null when nothing's in transit. */
+  inTransitQty?: number | null;
+  inTransitEta?: string | null;
   status: string;
   isReorderable: boolean;
   isSellable: boolean;
