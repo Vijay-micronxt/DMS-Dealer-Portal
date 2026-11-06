@@ -55,10 +55,19 @@ export function BoxesPiecesFields({
       <Input
         type="number"
         min={0}
+        step={1}
         inputMode="numeric"
         placeholder="Boxes"
         value={boxes}
-        onChange={(e) => onBoxesChange(e.target.value)}
+        onChange={(e) => {
+          // Boxes is always a whole count -- a fractional box isn't a real thing,
+          // and the Pcs field right next to it is where a sub-box amount belongs.
+          // Client report, 6 Nov 2026 -- a live enquiry reached the backend as
+          // "28.444444 boxes" because nothing stopped a decimal from being typed
+          // or pasted straight into this field; strip anything but digits so one
+          // can never land here again.
+          onBoxesChange(e.target.value.replace(/[^0-9]/g, ""));
+        }}
         className={cn("flex-1", inputClassName)}
       />
       {/* No way to combine pieces into a box figure without this item's own
@@ -68,10 +77,11 @@ export function BoxesPiecesFields({
         <Input
           type="number"
           min={0}
+          step={1}
           inputMode="numeric"
           placeholder="Pcs"
           value={pieces}
-          onChange={(e) => onPiecesChange(e.target.value)}
+          onChange={(e) => onPiecesChange(e.target.value.replace(/[^0-9]/g, ""))}
           className={cn("w-20", inputClassName)}
         />
       )}

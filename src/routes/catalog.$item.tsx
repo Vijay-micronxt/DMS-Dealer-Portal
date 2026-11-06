@@ -249,9 +249,13 @@ function ItemDetailPage() {
   }
 
   function setBatchQty(batchNumber: string, raw: string, batchBoxes: number) {
+    // Boxes is always a whole count -- same fix as BoxesPiecesFields' own Boxes
+    // field (client report, 6 Nov 2026 -- a decimal typed/pasted here reached
+    // the backend unrounded).
+    const digitsOnly = raw.replace(/[^0-9]/g, "");
     setBatchAlloc((prev) => {
       const cap = roomFor(batchNumber, batchBoxes, prev);
-      const n = raw === "" ? 0 : Math.max(0, Math.min(Number(raw) || 0, cap));
+      const n = digitsOnly === "" ? 0 : Math.max(0, Math.min(Number(digitsOnly), cap));
       return { ...prev, [batchNumber]: String(n) };
     });
   }
