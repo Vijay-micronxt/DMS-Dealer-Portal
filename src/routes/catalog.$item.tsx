@@ -23,7 +23,7 @@ import {
   requestQuotation,
 } from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { Inquiry } from "@/api/types";
 
 export const Route = createFileRoute("/catalog/$item")({
@@ -305,6 +305,15 @@ function ItemDetailPage() {
               {!item.isSellable && <Badge tone="neutral">{item.status}</Badge>}
               {!item.orderable && <Badge tone="info">Inquire only</Badge>}
             </div>
+            {/* BRD C.3.2 -- "Transit Warehouse": not real stock, just visibility that more is
+                already on an open Purchase Order, so a low/0-stock item doesn't read as a dead
+                end. Never folded into availableStockQty above. */}
+            {!!item.inTransitQty && (
+              <p className="text-xs text-zinc-500">
+                {item.inTransitQty} more boxes in transit
+                {item.inTransitEta ? ` — expected ~${formatDate(item.inTransitEta)}` : ""}
+              </p>
+            )}
 
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div>
