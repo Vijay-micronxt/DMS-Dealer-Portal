@@ -8,6 +8,7 @@ import { Badge, toneForStatus } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
+import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ApiError } from "@/lib/erp-client";
 import { acceptQuotation, getMyQuotation } from "@/api/quotations";
@@ -113,10 +114,21 @@ function QuotationDetailPage() {
             <div className="divide-y divide-zinc-100">
               {q.lines.map((l) => (
                 <div key={l.itemCode} className="flex gap-3 py-2 text-sm">
+                  {/* Client request, 12 Nov 2026 -- same tap-to-zoom treatment the
+                      enquiry/catalog screens already have. */}
+                  <ClickableThumbnail
+                    images={l.images ?? []}
+                    className="h-11 w-11"
+                    alt={l.itemName || l.itemCode}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-zinc-900">
+                    <Link
+                      to="/catalog/$item"
+                      params={{ item: l.itemCode }}
+                      className="block truncate font-medium text-zinc-900 underline-offset-2 hover:underline"
+                    >
                       {l.itemName || l.itemCode}
-                    </p>
+                    </Link>
                     <p className="text-xs text-zinc-500">
                       {l.itemCode} · {l.qty} boxes × {formatCurrency(l.rate)}
                       {l.discountPercentage > 0 &&

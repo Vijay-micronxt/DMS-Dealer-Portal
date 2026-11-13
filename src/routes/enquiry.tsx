@@ -23,11 +23,13 @@ import {
   useEnquiryList,
 } from "@/lib/enquiry-list";
 import {
+  checkRecentInquiry,
   convertToOrder,
   raiseInquiries,
   requestQuotation,
 } from "@/api/inquiries";
-import type { Inquiry } from "@/api/types";
+import type { CatalogItem } from "@/api/types";
+import type { InquiryItemRow } from "@/api/types";
 
 export const Route = createFileRoute("/enquiry")({
   component: EnquiryListPage,
@@ -43,7 +45,7 @@ function EnquiryListPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [sentGroup, setSentGroup] = React.useState<string | null>(null);
-  const [sentItems, setSentItems] = React.useState<Inquiry[]>([]);
+  const [sentItems, setSentItems] = React.useState<InquiryItemRow[]>([]);
 
   const sendMutation = useMutation({
     mutationFn: () =>
@@ -80,35 +82,25 @@ function EnquiryListPage() {
     },
   });
 
-  // BRD C.13.1, re-enabled 2 Nov 2026 -- convert_to_order only ever builds one order
-  // from one inquiry's own lines (no group/batch variant), so a multi-item enquiry
-  // becomes one order per item here, all carrying the same PO number/dispatch date
-  // entered once -- not a single combined order.
+  // BRD C.13.1, re-enabled 2 Nov 2026; 12 Nov 2026 rebuild (BRD D.3) -- convert_to_order
+  // now builds ONE combined Sales Order from every real item on this Inquiry, so a
+  // multi-item enquiry is a single call here too, not one order per item.
   const [orderPo, setOrderPo] = React.useState("");
   const [orderDispatchDate, setOrderDispatchDate] = React.useState("");
   const [orderError, setOrderError] = React.useState<string | null>(null);
   const allOrderable =
     sentItems.length > 0 && sentItems.every((i) => i.orderable);
   const createOrderMutation = useMutation({
-    mutationFn: async () => {
-      const orders = [];
-      for (const inquiry of sentItems) {
-        orders.push(
-          await convertToOrder({
-            inquiry: inquiry.id,
-            expectedDispatch: orderDispatchDate,
-            customerPo: orderPo.trim(),
-          }),
-        );
-      }
-      return orders;
-    },
-    onSuccess: (orders) => {
+    mutationFn: () =>
+      convertToOrder({
+        inquiry: sentGroup!,
+        expectedDispatch: orderDispatchDate,
+        customerPo: orderPo.trim(),
+      }),
+    onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ["my-inquiries"] });
       queryClient.invalidateQueries({ queryKey: ["my-orders"] });
-      if (orders.length === 1 && orders[0]) {
-        void navigate({ to: "/orders/$id", params: { id: orders[0].id } });
-      }
+      void navigate({ to: "/orders/$id", params: { id: order.id } });
     },
     onError: (err) =>
       setOrderError(
@@ -154,9 +146,7 @@ function EnquiryListPage() {
 
               {createOrderMutation.isSuccess ? (
                 <p className="text-sm font-medium text-emerald-600">
-                  {createOrderMutation.data.length === 1
-                    ? "Order created."
-                    : `${createOrderMutation.data.length} orders created (one per item).`}
+                  Order created.
                 </p>
               ) : (
                 // Client request, 2 Nov 2026 -- once a quotation's been asked for, Pacific is
@@ -165,12 +155,6 @@ function EnquiryListPage() {
                 allOrderable &&
                 !askForQuotationMutation.isSuccess && (
                   <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
-                    {sentItems.length > 1 && (
-                      <p className="text-xs text-zinc-500">
-                        One order per item ({sentItems.length} total) — this
-                        can't yet be combined into a single order.
-                      </p>
-                    )}
                     <label className="block text-xs font-medium text-zinc-700">
                       Your PO number
                       <Input
@@ -199,7 +183,7 @@ function EnquiryListPage() {
                       loading={createOrderMutation.isPending}
                       disabled={!orderPo.trim() || !orderDispatchDate}
                     >
-                      Create order{sentItems.length > 1 ? "s" : ""}
+                      Create order
                     </Button>
                   </div>
                 )
@@ -248,79 +232,79 @@ function EnquiryListPage() {
                   key={`${line.code}-${line.damagedStock ? "damaged" : "regular"}-${line.preferredBatchNo ?? "auto"}`}
                 >
                   <CardContent className="space-y-1.5">
-                  <div className="flex items-center gap-3">
-                    <ClickableThumbnail
-                      images={line.images ?? []}
-                      className="h-12 w-12"
-                      alt={line.name}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate text-sm font-medium text-zinc-900">
-                          {line.name}
-                        </p>
-                        {line.damagedStock && (
-                          <Badge tone="warning" className="shrink-0">
-                            Damaged
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-zinc-500">
-                        {line.code}
-                        {/* ISS-2026-00712 -- shown so a dealer who picked a specific
+                    <div className="flex items-center gap-3">
+                      <ClickableThumbnail
+                        images={line.images ?? []}
+                        className="h-12 w-12"
+                        alt={line.name}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="truncate text-sm font-medium text-zinc-900">
+                            {line.name}
+                          </p>
+                          {line.damagedStock && (
+                            <Badge tone="warning" className="shrink-0">
+                              Damaged
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                          {line.code}
+                          {/* ISS-2026-00712 -- shown so a dealer who picked a specific
                             batch on the item page can see it stuck, before sending. */}
-                        {line.preferredBatchNo && (
-                          <> · Batch {line.preferredBatchNo}</>
-                        )}
-                      </p>
+                          {line.preferredBatchNo && (
+                            <> · Batch {line.preferredBatchNo}</>
+                          )}
+                        </p>
+                      </div>
+                      <BoxesPiecesFields
+                        boxes={line.qty ? String(line.qty) : ""}
+                        pieces={line.pieces ? String(line.pieces) : ""}
+                        onBoxesChange={(v) =>
+                          setEnquiryQty(
+                            line.code,
+                            Number(v) || 0,
+                            line.damagedStock,
+                            line.preferredBatchNo,
+                          )
+                        }
+                        onPiecesChange={(v) =>
+                          setEnquiryPieces(
+                            line.code,
+                            Number(v) || 0,
+                            line.damagedStock,
+                            line.preferredBatchNo,
+                          )
+                        }
+                        piecesPerBox={line.piecesPerBox}
+                        className="w-auto shrink-0"
+                        inputClassName="h-9 w-20 text-sm"
+                      />
+                      <button
+                        aria-label={`Remove ${line.name}`}
+                        onClick={() =>
+                          removeFromEnquiryList(
+                            line.code,
+                            line.damagedStock,
+                            line.preferredBatchNo,
+                          )
+                        }
+                        className="shrink-0 p-1 text-zinc-400"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <BoxesPiecesFields
-                      boxes={line.qty ? String(line.qty) : ""}
-                      pieces={line.pieces ? String(line.pieces) : ""}
-                      onBoxesChange={(v) =>
-                        setEnquiryQty(
-                          line.code,
-                          Number(v) || 0,
-                          line.damagedStock,
-                          line.preferredBatchNo,
-                        )
-                      }
-                      onPiecesChange={(v) =>
-                        setEnquiryPieces(
-                          line.code,
-                          Number(v) || 0,
-                          line.damagedStock,
-                          line.preferredBatchNo,
-                        )
-                      }
-                      piecesPerBox={line.piecesPerBox}
-                      className="w-auto shrink-0"
-                      inputClassName="h-9 w-20 text-sm"
-                    />
-                    <button
-                      aria-label={`Remove ${line.name}`}
-                      onClick={() =>
-                        removeFromEnquiryList(
-                          line.code,
-                          line.damagedStock,
-                          line.preferredBatchNo,
-                        )
-                      }
-                      className="shrink-0 p-1 text-zinc-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {/* ISS-2026-00712, client report 5 Nov 2026 -- a batch-tied line
+                    {/* ISS-2026-00712, client report 5 Nov 2026 -- a batch-tied line
                       edited past that batch's own on-hand qty right here, caught
                       before Send rather than only on a failed round-trip. */}
-                  {line.batchMaxBoxes !== undefined &&
-                    line.qty > line.batchMaxBoxes && (
-                      <p className="text-xs text-red-600">
-                        {line.preferredBatchNo} only has {line.batchMaxBoxes}{" "}
-                        boxes — lower the qty or remove this line.
-                      </p>
-                    )}
+                    {line.batchMaxBoxes !== undefined &&
+                      line.qty > line.batchMaxBoxes && (
+                        <p className="text-xs text-red-600">
+                          {line.preferredBatchNo} only has {line.batchMaxBoxes}{" "}
+                          boxes — lower the qty or remove this line.
+                        </p>
+                      )}
                   </CardContent>
                 </Card>
               ))}
@@ -390,6 +374,31 @@ function AddItem({
         ? [byCode.data]
         : [];
   const inList = new Set(lines.map((l) => l.code));
+
+  // Client request, 12 Nov 2026 -- warns before adding an item the dealer already
+  // asked about in the last 24 hours (checkRecentInquiry), rather than finding out
+  // only after staff notice the same item enquired twice. A hint, not a block --
+  // confirming still adds it, same as every other duplicate check in this app.
+  const addMutation = useMutation({
+    mutationFn: async (item: CatalogItem) => {
+      const { recent } = await checkRecentInquiry({ item: item.code });
+      if (
+        recent &&
+        !window.confirm(
+          `You already asked about ${item.name} in the last 24 hours. Add it again anyway?`,
+        )
+      ) {
+        return;
+      }
+      addToEnquiryList({
+        code: item.code,
+        name: item.name,
+        qty: 1,
+        images: item.images,
+        piecesPerBox: item.piecesPerBox,
+      });
+    },
+  });
 
   if (!adding) {
     return (
@@ -484,16 +493,12 @@ function AddItem({
                   variant={added ? "ghost" : "outline"}
                   size="sm"
                   className="w-auto shrink-0"
-                  disabled={added}
-                  onClick={() =>
-                    addToEnquiryList({
-                      code: item.code,
-                      name: item.name,
-                      qty: 1,
-                      images: item.images,
-                      piecesPerBox: item.piecesPerBox,
-                    })
+                  disabled={added || addMutation.isPending}
+                  loading={
+                    addMutation.isPending &&
+                    addMutation.variables?.code === item.code
                   }
+                  onClick={() => addMutation.mutate(item)}
                 >
                   {added ? "In list" : "Add"}
                 </Button>

@@ -25,7 +25,7 @@ export const Route = createFileRoute("/inquiries/$id")({
 });
 
 /** One enquiry and everything in it: the items the dealer asked about together, each with its own
- * quantity and status, and the quotation(s) Pacific prepared. */
+ * quantity and stock availability, and the quotation Pacific prepared. */
 function EnquiryDetailPage() {
   const { id } = Route.useParams();
   const queryClient = useQueryClient();
@@ -43,34 +43,25 @@ function EnquiryDetailPage() {
     },
   });
 
-  // BRD C.13.1, re-enabled 2 Nov 2026 -- same "Create order" path already offered
-  // from the item page and the enquiry cart; this is the third/last place an
-  // enquiry's own items are shown before a quotation exists. convert_to_order only
-  // ever builds one order from one inquiry's own lines (no group/batch variant), so
-  // several waiting items here becomes one order per item, same caveat as the cart.
+  // BRD C.13.1, re-enabled 2 Nov 2026; 12 Nov 2026 rebuild (BRD D.3) -- same "Create
+  // order" path already offered from the item page and the enquiry cart; this is the
+  // third/last place an enquiry's own items are shown before a quotation exists.
+  // convert_to_order now builds ONE combined Sales Order from every real item on this
+  // Inquiry, so this whole enquiry becomes a single call, not one order per item.
   const [orderPo, setOrderPo] = React.useState("");
   const [orderDispatchDate, setOrderDispatchDate] = React.useState("");
   const [orderError, setOrderError] = React.useState<string | null>(null);
   const createOrderMutation = useMutation({
-    mutationFn: async (waitingItems: { id: string }[]) => {
-      const orders = [];
-      for (const item of waitingItems) {
-        orders.push(
-          await convertToOrder({
-            inquiry: item.id,
-            expectedDispatch: orderDispatchDate,
-            customerPo: orderPo.trim(),
-          }),
-        );
-      }
-      return orders;
-    },
-    onSuccess: (orders) => {
+    mutationFn: () =>
+      convertToOrder({
+        inquiry: id,
+        expectedDispatch: orderDispatchDate,
+        customerPo: orderPo.trim(),
+      }),
+    onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ["inquiry", id] });
       queryClient.invalidateQueries({ queryKey: ["my-orders"] });
-      if (orders.length === 1 && orders[0]) {
-        void navigate({ to: "/orders/$id", params: { id: orders[0].id } });
-      }
+      void navigate({ to: "/orders/$id", params: { id: order.id } });
     },
     onError: (err) =>
       setOrderError(
@@ -98,9 +89,13 @@ function EnquiryDetailPage() {
   }
 
   const enquiry = query.data;
-  const waiting = enquiry.items.filter(
-    (i) => !i.linkedQuotation && !TERMINAL_STATUSES.has(i.status),
-  );
+  // 12 Nov 2026 rebuild (BRD D.3) -- linkedQuotation and workflow status are whole-
+  // Inquiry fields now, not per item, so "waiting on a quotation" is a whole-enquiry
+  // state; `waiting` stays an items array (not just a boolean) only so the rest of
+  // this page -- the order/quotation panel below -- doesn't need reshaping.
+  const isWaiting =
+    !enquiry.linkedQuotation && !TERMINAL_STATUSES.has(enquiry.status);
+  const waiting = isWaiting ? enquiry.items : [];
   // Items Pacific can't quote for ordering yet: outside the dealer's catalogue, or a custom style.
   const notOrderable = waiting.filter((i) => !i.orderable);
 
@@ -138,6 +133,11 @@ function EnquiryDetailPage() {
                 <p className="text-zinc-900">{enquiry.remarks}</p>
               </div>
             )}
+            {/* 12 Nov 2026 rebuild: customerPo is a whole-Inquiry field now, not
+                per item -- shown once here instead of repeated on every row below. */}
+            {enquiry.customerPo && (
+              <p className="text-xs text-zinc-500">PO {enquiry.customerPo}</p>
+            )}
           </CardContent>
         </Card>
 
@@ -147,7 +147,7 @@ function EnquiryDetailPage() {
             <div className="divide-y divide-zinc-100">
               {enquiry.items.map((item) => (
                 <div
-                  key={item.id}
+                  key={item.lineId}
                   className="flex items-start justify-between gap-3 py-2 text-sm"
                 >
                   <ClickableThumbnail
@@ -157,9 +157,23 @@ function EnquiryDetailPage() {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <p className="truncate font-medium text-zinc-900">
-                        {itemLabel(item)}
-                      </p>
+                      {/* Client request, 12 Nov 2026 -- tapping the name goes to the item's
+                          own detail page, same as its thumbnail already opens the image
+                          dialog. Only when there's a real catalog item behind this line --
+                          a Custom Style request (no productId) has no detail page to go to. */}
+                      {item.productId ? (
+                        <Link
+                          to="/catalog/$item"
+                          params={{ item: item.productId }}
+                          className="truncate font-medium text-zinc-900 underline-offset-2 hover:underline"
+                        >
+                          {itemLabel(item)}
+                        </Link>
+                      ) : (
+                        <p className="truncate font-medium text-zinc-900">
+                          {itemLabel(item)}
+                        </p>
+                      )}
                       {/* Client report, 2 Nov 2026 -- a damaged-stock line and a regular
                           line for the same item (ISS-2026-00678) looked identical here,
                           unlike the enquiry cart's own list, which already flags it. */}
@@ -191,35 +205,32 @@ function EnquiryDetailPage() {
                         <> · Batch {item.preferredBatchNo}</>
                       )}
                     </p>
-                    {item.customerPo && (
-                      <p className="text-xs text-zinc-500">
-                        PO {item.customerPo}
-                      </p>
-                    )}
                   </div>
-                  <Badge tone={toneForStatus(item.status)}>{item.status}</Badge>
+                  {/* 12 Nov 2026 rebuild: workflow status (shown once, at the top of
+                      this enquiry) and per-item stock availability are separate now --
+                      this badge is this row's own availabilityStatus. */}
+                  <Badge tone={toneForStatus(item.availabilityStatus)}>
+                    {item.availabilityStatus}
+                  </Badge>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        {enquiry.linkedQuotations.length > 0 && (
+        {enquiry.linkedQuotation && (
           <Card>
             <CardContent className="space-y-2">
               <p className="text-sm text-zinc-700">
                 Pacific has sent you a quotation for this enquiry.
               </p>
-              {enquiry.linkedQuotations.map((q) => (
-                <Link
-                  key={q}
-                  to="/quotations/$id"
-                  params={{ id: q }}
-                  className="block text-center text-sm font-medium text-zinc-900 underline"
-                >
-                  View quotation {q}
-                </Link>
-              ))}
+              <Link
+                to="/quotations/$id"
+                params={{ id: enquiry.linkedQuotation }}
+                className="block text-center text-sm font-medium text-zinc-900 underline"
+              >
+                View quotation {enquiry.linkedQuotation}
+              </Link>
             </CardContent>
           </Card>
         )}
@@ -230,8 +241,7 @@ function EnquiryDetailPage() {
               {(() => {
                 const allOrderable = notOrderable.length === 0;
                 const quotationAsked =
-                  waiting.some((i) => i.dealerRequestedQuote) ||
-                  requestMutation.isSuccess;
+                  enquiry.dealerRequestedQuote || requestMutation.isSuccess;
                 return (
                   <>
                     <p className="text-sm text-zinc-700">
@@ -248,9 +258,7 @@ function EnquiryDetailPage() {
 
                     {createOrderMutation.isSuccess ? (
                       <p className="text-sm font-medium text-emerald-600">
-                        {createOrderMutation.data.length === 1
-                          ? "Order created."
-                          : `${createOrderMutation.data.length} orders created (one per item).`}
+                        Order created.
                       </p>
                     ) : (
                       // BRD C.13.1, re-enabled 2 Nov 2026 -- hidden once a quotation's
@@ -259,12 +267,6 @@ function EnquiryDetailPage() {
                       allOrderable &&
                       !quotationAsked && (
                         <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
-                          {waiting.length > 1 && (
-                            <p className="text-xs text-zinc-500">
-                              One order per item ({waiting.length} total) — this
-                              can't yet be combined into a single order.
-                            </p>
-                          )}
                           <label className="block text-xs font-medium text-zinc-700">
                             Your PO number
                             <Input
@@ -291,11 +293,11 @@ function EnquiryDetailPage() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() => createOrderMutation.mutate(waiting)}
+                            onClick={() => createOrderMutation.mutate()}
                             loading={createOrderMutation.isPending}
                             disabled={!orderPo.trim() || !orderDispatchDate}
                           >
-                            Create order{waiting.length > 1 ? "s" : ""}
+                            Create order
                           </Button>
                         </div>
                       )

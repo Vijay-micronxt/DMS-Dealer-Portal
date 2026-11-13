@@ -73,24 +73,27 @@ export type CatalogItem = {
   isRecommended?: boolean;
 };
 
-export type Inquiry = {
-  id: string;
-  number: string;
-  date: string;
-  dealerId: string;
-  /** null for a Custom Style enquiry (ISS-2026-00636) -- see requestedStyle. */
+/** 12 Nov 2026 rebuild (BRD D.3) -- one row of an Inquiry's own `items` list. Several
+ * items raised together used to mean several whole Inquiry records sharing one
+ * `requestGroup` string, each with its own status; now they're rows on the SAME
+ * Inquiry, and per-item stock availability lives here (`availabilityStatus`) rather
+ * than on a whole-record `status`, which is workflow-only now (see Inquiry below). */
+export type InquiryItemRow = {
+  /** This row's own id -- stable across edits, but not an Inquiry id (an Inquiry's
+   * own id is its parent's). */
+  lineId: string;
+  /** null for a Custom Style row (ISS-2026-00636) -- see requestedStyle. */
   productId: string | null;
-  /** The item's name, when it has one different from its code. */
+  /** The item's name, when it has one different from its code. Dealer-facing calls
+   * only (get/listMyInquiry(ies), get/listMyEnquiry(ies)) -- absent on raiseInquiry(ies)'s
+   * own immediate response, which doesn't look it up. */
   productName?: string | null;
-  /** Client request, 2 Nov 2026 -- empty for a Custom Style enquiry (no item). */
+  /** Client request, 2 Nov 2026 -- empty for a Custom Style row (no item). Dealer-facing
+   * calls only, same as productName above. */
   images?: ProductImage[];
   /** ISS-2026-00636 -- the style name typed through WhatsApp's "Custom Style"
-   * option, when the enquiry has no catalog item; null otherwise. */
+   * option, when this row has no catalog item; null otherwise. */
   requestedStyle: string | null;
-  /** Client reversal, Oct 2026 -- this dealer's own tier/override rate at the time of
-   * this enquiry, same resolution CatalogItem.price uses. Null for a Custom Style
-   * enquiry (no item) or when nothing resolves yet; never 0. */
-  price: number | null;
   qty: number;
   /** Client request, 2 Nov 2026 -- the qty/unit as actually entered, when it wasn't a
    * plain Box qty; null otherwise. Same fields/convention pacific-tileflow's Order/
@@ -101,8 +104,59 @@ export type Inquiry = {
   enteredQty?: number | null;
   enteredUom?: string | null;
   enteredBoxes?: number | null;
+  /** ISS-2026-00678 -- raised against damaged/insurance-claim bay stock specifically
+   * (see the item page's damaged-stock section), not regular inventory. */
+  damagedStock: boolean;
+  /** ISS-2026-00712 -- the dealer's own batch choice for this row, if any; null/
+   * absent ("Auto") means it's left to the warehouse at dispatch time. Carried onto
+   * the resulting Sales Order line if/when convertToOrder runs. */
+  preferredBatchNo?: string | null;
+  /** This row's own real-time stock state, derived at creation and never revisited
+   * after -- a historical snapshot, not a live figure. "Open" only for a Custom
+   * Style row (no item to check stock against). */
+  availabilityStatus: string;
+  /** Client request, 12 Nov 2026 -- set when this exact (item, damagedStock) was
+   * also asked about in the last rolling 24 hours; a hint shown to staff, not a block. */
+  duplicateFlag: boolean;
   weightPerBoxKg: number | null;
   totalWeightKg: number | null;
+  piecesPerBox: number | null;
+  totalPieces: number | null;
+  sqftPerBox: number | null;
+  totalSqft: number | null;
+  sqmPerBox: number | null;
+  totalSqm: number | null;
+  /** ISS-2026-00644 -- false for an item not in your assigned catalog (and for a Custom
+   * Style row): it can be enquired on, but Pacific can't quote it for ordering yet. Set
+   * on every response this type appears in (raiseInquiry(ies) and the dealer-facing
+   * get/list calls each compute it their own way). */
+  orderable?: boolean;
+};
+
+/** 12 Nov 2026 rebuild (BRD D.3) -- one Inquiry, genuinely holding every item the dealer
+ * asked about together as its own `items` row, rather than needing several whole
+ * records glued together by a `requestGroup` string the way this used to work. `Enquiry`
+ * below is the exact same shape, kept as its own name only because the UI still
+ * distinguishes "the whole thing the dealer sent" from "one line in it" even though the
+ * backend doesn't draw that line any more -- getMyEnquiry/listMyEnquiries are thin
+ * wrappers over getMyInquiry/listMyInquiries now, not a separate grouping view. */
+export type Inquiry = {
+  id: string;
+  number: string;
+  date: string;
+  createdAt: string;
+  dealerId: string;
+  items: InquiryItemRow[];
+  itemCount: number;
+  /** Keyed by each item row's own lineId; absent for a Custom Style row (no catalog
+   * item to price). Never actually rendered anywhere in this app ("don't show price
+   * before quotation") -- raiseInquiry(ies) strips it from its own response outright,
+   * and nothing reads it off the dealer-facing get/list calls that do still carry it. */
+  prices?: Record<string, number | null>;
+  /** Workflow stage only now (Open/Quoted/Converted to Order/Rejected/Mapped to PO/
+   * Closed) -- per-item stock availability moved to each row's own availabilityStatus
+   * above; there's no more "Mixed" (that only ever existed because several items
+   * raised together used to be several records, each with its own status). */
   status: string;
   source: string;
   expectedDelivery: string | null;
@@ -115,46 +169,26 @@ export type Inquiry = {
   remarks: string | null;
   whatsappReplied: boolean;
   customerPo: string | null;
-  /** ISS-2026-00644 -- false for an item not in your assigned catalog (and for a Custom
-   * Style enquiry): it can be enquired on, but Pacific can't quote it for ordering yet. */
-  orderable: boolean;
-  /** Several items raised together share one group id (the first enquiry's number). */
-  requestGroup: string | null;
-  /** ISS-2026-00678 -- raised against damaged/insurance-claim bay stock specifically
-   * (see the item page's damaged-stock section), not regular inventory. */
-  damagedStock: boolean;
-  /** ISS-2026-00712 -- the dealer's own batch choice at enquiry time, if any; null/
-   * absent ("Auto") means it's left to the warehouse at dispatch time. Carried onto
-   * the resulting Sales Order line if/when convertToOrder runs. */
-  preferredBatchNo?: string | null;
-  /** The quotation Pacific prepared for this enquiry -- where the dealer sees the price and
-   * accepts it to place the order. null until one is sent. */
+  /** The ONE quotation/order Pacific built from this whole Inquiry's real items, if any.
+   * Singular now -- several items raised together build one combined Quotation/Sales
+   * Order, never one each. */
   linkedQuotation: string | null;
-  /** Only present on the response to raise_inquiry -- a recent open duplicate's id, if any. */
+  linkedSalesOrder: string | null;
+  linkedOpportunity: string | null;
+  /** Only present on the response to raiseInquiry(ies) -- a recent open duplicate's id, if any. */
   duplicateOf?: string | null;
 };
 
-/** One enquiry as the dealer made it. Items sent together from the enquiry list are ONE enquiry
- * holding all of them (each still its own record on Pacific's side, which is why `items` carries a
- * status per item). A lone item is an enquiry of one. */
-export type Enquiry = {
-  /** The group id for items sent together, or the item's own enquiry number. */
-  id: string;
-  number: string;
-  date: string;
-  createdAt: string;
-  /** The shared status, or "Mixed" when the items are in different states. */
-  status: string;
-  itemCount: number;
-  remarks: string | null;
-  /** Quotations Pacific prepared for this enquiry's items (usually one). */
-  linkedQuotations: string[];
-  items: Inquiry[];
-};
+/** Same shape as Inquiry -- see that type's own docstring for why this still exists
+ * as its own name. */
+export type Enquiry = Inquiry;
 
 export type QuotationLine = {
   itemCode: string;
   itemName: string;
+  /** Client request, 12 Nov 2026 -- lets this line reuse ClickableThumbnail, same as
+   * the enquiry/catalog screens already do. */
+  images: ProductImage[];
   qty: number;
   /** The rate before any discount. */
   priceListRate: number;
@@ -217,6 +251,8 @@ export type InvoiceDetail = Invoice & {
   items: {
     itemCode: string;
     itemName: string;
+    /** Client request, 12 Nov 2026 -- lets this line reuse ClickableThumbnail. */
+    images: ProductImage[];
     qty: number;
     uom: string | null;
     rate: number;
@@ -239,6 +275,10 @@ export type OrderLine = {
    * on a backend that predates partial invoicing. */
   lineId?: string;
   itemCode: string;
+  /** Client request, 12 Nov 2026 -- absent on a backend that predates this; fall
+   * back to itemCode when missing. */
+  itemName?: string;
+  images?: ProductImage[];
   qty: number;
   /** ISS-2026-00710 -- qty already billed / still open on this line, summed across
    * every live invoice against this order. Absent on a backend that predates this. */

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, toneForStatus } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
+import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cancelMyOrder, getMyOrder } from "@/api/orders";
 import { ApiError } from "@/lib/erp-client";
@@ -190,10 +191,26 @@ function OrderDetailPage() {
               {order.lines.map((line, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between py-2 text-sm"
+                  className="flex items-start justify-between gap-3 py-2 text-sm"
                 >
-                  <div>
-                    <p className="text-zinc-900">{line.itemCode}</p>
+                  {/* Client request, 12 Nov 2026 -- same tap-to-zoom treatment the
+                      enquiry/catalog screens already have. Absent on a backend that
+                      predates this (images optional on OrderLine) -- renders nothing
+                      tappable then, same as ClickableThumbnail already does for an
+                      item with no real images. */}
+                  <ClickableThumbnail
+                    images={line.images ?? []}
+                    className="h-11 w-11"
+                    alt={line.itemName || line.itemCode}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to="/catalog/$item"
+                      params={{ item: line.itemCode }}
+                      className="block truncate text-zinc-900 underline-offset-2 hover:underline"
+                    >
+                      {line.itemName || line.itemCode}
+                    </Link>
                     <p className="text-xs text-zinc-500">
                       {line.qty} boxes
                       {/* ISS-2026-00712 -- shown so a dealer who picked a specific
