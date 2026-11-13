@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
+import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { getMyInvoice } from "@/api/invoices";
 
@@ -105,10 +106,21 @@ function InvoiceDetailPage() {
                   key={`${row.itemCode}-${i}`}
                   className="flex gap-3 py-2 text-sm"
                 >
+                  {/* Client request, 12 Nov 2026 -- same tap-to-zoom treatment the
+                      enquiry/catalog screens already have. */}
+                  <ClickableThumbnail
+                    images={row.images ?? []}
+                    className="h-11 w-11"
+                    alt={row.itemName || row.itemCode}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-zinc-900">
+                    <Link
+                      to="/catalog/$item"
+                      params={{ item: row.itemCode }}
+                      className="block truncate font-medium text-zinc-900 underline-offset-2 hover:underline"
+                    >
                       {row.itemName || row.itemCode}
-                    </p>
+                    </Link>
                     <p className="text-xs text-zinc-500">
                       {row.qty} {row.uom ?? ""} × {formatCurrency(row.rate)}
                       {row.batchNo ? ` · Batch ${row.batchNo}` : ""}

@@ -1,5 +1,11 @@
 import { authedCall } from "@/lib/auth";
-import type { Enquiry, Inquiry, Order, Paginated } from "@/api/types";
+import type {
+  Enquiry,
+  Inquiry,
+  InquiryItemRow,
+  Order,
+  Paginated,
+} from "@/api/types";
 
 export function raiseInquiry(params: {
   item: string;
@@ -32,9 +38,12 @@ export function raiseInquiry(params: {
   });
 }
 
-/** Several items enquired on in one go. Each becomes its own enquiry; they share one
- * `requestGroup` so Pacific can quote them together. Nothing is created unless every
- * line is valid. */
+/** 12 Nov 2026 rebuild (BRD D.3) -- several items enquired on in one go now land as rows
+ * on ONE Inquiry (`requestGroup`/`enquiry` are both that one Inquiry's own id -- kept as
+ * two keys since the response shape itself hasn't changed, only what the id now points
+ * at), not several whole records glued together by a shared group string. `items` here
+ * is this one Inquiry's own item rows, not a list of separate enquiries. Nothing is
+ * created unless every line is valid. */
 export function raiseInquiries(params: {
   items: {
     item: string;
@@ -44,7 +53,11 @@ export function raiseInquiries(params: {
     preferredBatchNo?: string | undefined;
   }[];
   remarks?: string | undefined;
-}): Promise<{ requestGroup: string; items: Inquiry[] }> {
+}): Promise<{
+  requestGroup: string;
+  enquiry: string;
+  items: InquiryItemRow[];
+}> {
   return authedCall("dms_erp.sales.dealer_portal_api.raise_inquiries", {
     method: "POST",
     params: { items: JSON.stringify(params.items), remarks: params.remarks },
@@ -67,6 +80,20 @@ export function getMyInquiry(inquiry: string): Promise<Inquiry> {
   return authedCall("dms_erp.sales.dealer_portal_api.get_my_inquiry", {
     method: "GET",
     params: { inquiry },
+  });
+}
+
+/** Client request, 12 Nov 2026 -- a genuine rolling 24-hour check (not BRD C.2.4's
+ * own 7-day one), used by the enquiry list's "Add" button to warn a dealer before
+ * they add an item they already asked about recently. A hint only -- adding still
+ * goes through either way, same as every other duplicate check in this app. */
+export function checkRecentInquiry(params: {
+  item: string;
+  damagedStock?: boolean | undefined;
+}): Promise<{ recent: boolean; inquiry: string | null }> {
+  return authedCall("dms_erp.sales.dealer_portal_api.check_recent_inquiry", {
+    method: "GET",
+    params: { item: params.item, damaged_stock: params.damagedStock },
   });
 }
 
@@ -104,9 +131,10 @@ export function requestQuotation(
 
 /** BRD C.13.1 -- "if in stock, the dealer can convert the enquiry to an order,
  * entering their own PO number to tag and close it," offered by the portal again
- * (2 Nov 2026) alongside acceptQuotation. One Sales Order is built straight from
- * this single inquiry's own item/qty -- there's no batch/group variant, so a
- * multi-item enquiry needs one call per inquiry id (see routes/enquiry.tsx). */
+ * (2 Nov 2026) alongside acceptQuotation. 12 Nov 2026 rebuild (BRD D.3): one Sales
+ * Order is built from EVERY real (non-Custom-Style) item on this Inquiry now, not just
+ * a single item/qty -- a multi-item enquiry is one call, one combined order, same as
+ * the single-item case; there's no more one-call-per-item looping needed. */
 export function convertToOrder(params: {
   inquiry: string;
   expectedDispatch: string;
