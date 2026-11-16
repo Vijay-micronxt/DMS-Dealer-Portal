@@ -15,7 +15,11 @@ export function formatCurrency(amount: number | null | undefined): string {
  * never on a field recording when something already happened, or a filter range, which must
  * stay free to go into the past. */
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Local parts, not toISOString(): that is the UTC date, which in India is still "yesterday"
+  // until 5:30am, so the date picker let people pick the day before today.
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function formatDate(value: string | null | undefined): string {
