@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { ClickableThumbnail } from "@/components/ui/image-gallery";
-import { formatDate } from "@/lib/utils";
+import { formatDate, todayISO } from "@/lib/utils";
 import { ApiError } from "@/lib/erp-client";
 import { itemLabel } from "@/lib/item-label";
 import {
@@ -280,6 +280,7 @@ function EnquiryDetailPage() {
                             Expected dispatch date
                             <Input
                               type="date"
+                              min={todayISO()}
                               value={orderDispatchDate}
                               onChange={(e) =>
                                 setOrderDispatchDate(e.target.value)

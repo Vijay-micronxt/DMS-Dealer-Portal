@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { BoxesPiecesFields } from "@/components/ui/boxes-pieces-fields";
 import { ApiError } from "@/lib/erp-client";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, todayISO } from "@/lib/utils";
 import { formatBoxQty } from "@/lib/stock-format";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { getCatalog, resolveCode } from "@/api/catalog";
@@ -168,6 +168,7 @@ function EnquiryListPage() {
                       Expected dispatch date
                       <Input
                         type="date"
+                        min={todayISO()}
                         value={orderDispatchDate}
                         onChange={(e) => setOrderDispatchDate(e.target.value)}
                         className="mt-1 h-9 text-sm"

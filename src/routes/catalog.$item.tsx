@@ -23,7 +23,7 @@ import {
   requestQuotation,
 } from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, todayISO } from "@/lib/utils";
 import type { Inquiry } from "@/api/types";
 
 export const Route = createFileRoute("/catalog/$item")({
@@ -225,7 +225,11 @@ function ItemDetailPage() {
   // How much of `batchNumber`'s own qty can still grow, given what every
   // *other* picked batch already uses -- shared by both the initial tap-fill
   // and manual edits, so neither can ever push the total past enteredBoxes.
-  function roomFor(batchNumber: string, batchBoxes: number, alloc: Record<string, string>) {
+  function roomFor(
+    batchNumber: string,
+    batchBoxes: number,
+    alloc: Record<string, string>,
+  ) {
     const usedByOthers = Object.entries(alloc)
       .filter(([bn]) => bn !== batchNumber)
       .reduce((s, [, v]) => s + (Number(v) || 0), 0);
@@ -255,7 +259,8 @@ function ItemDetailPage() {
     const digitsOnly = raw.replace(/[^0-9]/g, "");
     setBatchAlloc((prev) => {
       const cap = roomFor(batchNumber, batchBoxes, prev);
-      const n = digitsOnly === "" ? 0 : Math.max(0, Math.min(Number(digitsOnly), cap));
+      const n =
+        digitsOnly === "" ? 0 : Math.max(0, Math.min(Number(digitsOnly), cap));
       return { ...prev, [batchNumber]: String(n) };
     });
   }
@@ -315,7 +320,9 @@ function ItemDetailPage() {
             {!!item.inTransitQty && (
               <p className="text-xs text-zinc-500">
                 {item.inTransitQty} more boxes in transit
-                {item.inTransitEta ? ` — expected ~${formatDate(item.inTransitEta)}` : ""}
+                {item.inTransitEta
+                  ? ` — expected ~${formatDate(item.inTransitEta)}`
+                  : ""}
               </p>
             )}
 
@@ -490,7 +497,11 @@ function ItemDetailPage() {
                               max={b.boxes}
                               value={batchAlloc[b.batchNumber]}
                               onChange={(e) =>
-                                setBatchQty(b.batchNumber, e.target.value, b.boxes)
+                                setBatchQty(
+                                  b.batchNumber,
+                                  e.target.value,
+                                  b.boxes,
+                                )
                               }
                               className="h-8 w-16 shrink-0 bg-white text-right text-xs text-zinc-900"
                             />
@@ -503,7 +514,9 @@ function ItemDetailPage() {
                     <p
                       className={cn(
                         "text-xs",
-                        allocationComplete ? "text-emerald-700" : "text-amber-700",
+                        allocationComplete
+                          ? "text-emerald-700"
+                          : "text-amber-700",
                       )}
                     >
                       {allocatedTotal} of {enteredBoxes} boxes allocated
@@ -571,7 +584,8 @@ function ItemDetailPage() {
                         code: item.code,
                         name: item.name,
                         qty: Number(qtyStr),
-                        pieces: i === 0 ? combined.pieces || undefined : undefined,
+                        pieces:
+                          i === 0 ? combined.pieces || undefined : undefined,
                         images: item.images,
                         piecesPerBox: item.piecesPerBox,
                         preferredBatchNo: batchNumber,
@@ -804,6 +818,7 @@ function ItemDetailPage() {
                     Expected dispatch date
                     <Input
                       type="date"
+                      min={todayISO()}
                       value={orderDispatchDate}
                       onChange={(e) => setOrderDispatchDate(e.target.value)}
                       className="mt-1 h-9 text-sm"

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { ClickableThumbnail } from "@/components/ui/image-gallery";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, todayISO } from "@/lib/utils";
 import { ApiError } from "@/lib/erp-client";
 import { acceptQuotation, getMyQuotation } from "@/api/quotations";
 
@@ -209,6 +209,7 @@ function QuotationDetailPage() {
                 Expected dispatch date
                 <Input
                   type="date"
+                  min={todayISO()}
                   value={dispatchDate}
                   onChange={(e) => setDispatchDate(e.target.value)}
                   className="mt-1.5"
