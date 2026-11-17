@@ -98,6 +98,8 @@ function EnquiryDetailPage() {
   const waiting = isWaiting ? enquiry.items : [];
   // Items Pacific can't quote for ordering yet: outside the dealer's catalogue, or a custom style.
   const notOrderable = waiting.filter((i) => !i.orderable);
+  // A line asked for in a quantity that isn't on hand can be quoted but never ordered directly.
+  const notAvailable = waiting.filter((i) => i.available === false);
 
   return (
     <AppShell>
@@ -239,7 +241,8 @@ function EnquiryDetailPage() {
           <Card>
             <CardContent className="space-y-3">
               {(() => {
-                const allOrderable = notOrderable.length === 0;
+                const allOrderable =
+                  notOrderable.length === 0 && notAvailable.length === 0;
                 const quotationAsked =
                   enquiry.dealerRequestedQuote || requestMutation.isSuccess;
                 return (
@@ -249,11 +252,13 @@ function EnquiryDetailPage() {
                         ? "These items aren't yet set up for ordering on your account — our team will follow up to get them added and quote you."
                         : notOrderable.length > 0
                           ? "Pacific will send you a quotation with the prices. Some items here aren't yet set up for ordering on your account — our team will follow up on those."
-                          : createOrderMutation.isSuccess
-                            ? "Pacific will send you a quotation with the prices. Accept it there to place the order."
-                            : quotationAsked
+                          : notAvailable.length > 0
+                            ? "Some items aren't available in the quantity you asked for, so this can't be ordered directly. You can request a quotation — Pacific will send it with the prices."
+                            : createOrderMutation.isSuccess
                               ? "Pacific will send you a quotation with the prices. Accept it there to place the order."
-                              : "Create an order now, or ask Pacific for a quotation first."}
+                              : quotationAsked
+                                ? "Pacific will send you a quotation with the prices. Accept it there to place the order."
+                                : "Create an order now, or ask Pacific for a quotation first."}
                     </p>
 
                     {createOrderMutation.isSuccess ? (
