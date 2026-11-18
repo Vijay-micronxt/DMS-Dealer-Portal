@@ -10,6 +10,18 @@ export function formatCurrency(amount: number | null | undefined): string {
   return `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
+/** Today in the browser's local calendar day, as a date-input value. Used as `min` on any
+ * date field that represents something still to happen (a future scheduled/expected date) --
+ * never on a field recording when something already happened, or a filter range, which must
+ * stay free to go into the past. */
+export function todayISO(): string {
+  // Local parts, not toISOString(): that is the UTC date, which in India is still "yesterday"
+  // until 5:30am, so the date picker let people pick the day before today.
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);

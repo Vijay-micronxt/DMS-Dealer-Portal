@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { addToEnquiryList } from "@/lib/enquiry-list";
+import { useAvailability } from "@/api/availability";
+import { AvailabilityNote } from "@/components/availability-note";
 import { getExcludedStock, getItem, suggestAlternatives } from "@/api/catalog";
 import {
   convertToOrder,
@@ -23,12 +25,18 @@ import {
   requestQuotation,
 } from "@/api/inquiries";
 import { ApiError } from "@/lib/erp-client";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, todayISO } from "@/lib/utils";
 import type { Inquiry } from "@/api/types";
 
 export const Route = createFileRoute("/catalog/$item")({
   component: ItemDetailPage,
 });
+
+/** The pick-your-own-batch controls are switched off in the UI for now (the system picks the
+ * batch(es) from the quantity entered and shows the split). The code behind them -- batchAlloc,
+ * preferredBatchNo on the enquiry lines, the backend's own batch checks -- is all still here, so
+ * turning this back on is a one-line change. */
+const SHOW_BATCH_PICKER = false;
 
 const EXCLUDED_BAY_LABELS: Record<string, string> = {
   damage: "Damaged stock, condition as-is",
@@ -152,12 +160,34 @@ function ItemDetailPage() {
       ),
   });
 
+  // "Available" / "Not available" for the quantity actually typed (never a stock figure, never
+  // a "partly available"), plus which batch(es) it would come from.
+  const typedQty = readBoxesAndPieces(
+    qtyBoxes,
+    qtyPieces,
+    itemQuery.data?.piecesPerBox,
+  );
+  const availability = useAvailability(
+    typedQty
+      ? [
+          {
+            item: itemCode,
+            qty: typedQty.pieces,
+            enteredBoxes: typedQty.boxes,
+          },
+        ]
+      : [],
+  );
+  const notAvailableForQty = availability.lines?.[0]?.available === false;
+
   const alternativesQuery = useQuery({
     queryKey: ["alternatives", itemCode],
     queryFn: () => suggestAlternatives(itemCode),
-    // As soon as the item is out of stock -- not only after an enquiry -- so the dealer is shown
+    // As soon as the item can't be supplied -- not only after an enquiry -- so the dealer is shown
     // something they can order instead (Pacific's own pick first) while they're looking at it.
-    enabled: !!itemQuery.data && itemQuery.data.availableStockQty <= 0,
+    enabled:
+      !!itemQuery.data &&
+      (itemQuery.data.availableStockQty <= 0 || notAvailableForQty),
   });
 
   if (itemQuery.isLoading) {
@@ -181,6 +211,11 @@ function ItemDetailPage() {
 
   const item = itemQuery.data;
   const inStock = item.availableStockQty > 0 && item.isSellable;
+  // Once an enquiry's been sent, whether it can become an order is about the quantity that was
+  // asked for, not whether the item has any stock at all. The backend judges it per line.
+  const raisedAvailable = raisedInquiry
+    ? (raisedInquiry.items[0]?.available ?? inStock)
+    : inStock;
   const enteredCombined = readBoxesAndPieces(
     qtyBoxes,
     qtyPieces,
@@ -225,7 +260,11 @@ function ItemDetailPage() {
   // How much of `batchNumber`'s own qty can still grow, given what every
   // *other* picked batch already uses -- shared by both the initial tap-fill
   // and manual edits, so neither can ever push the total past enteredBoxes.
-  function roomFor(batchNumber: string, batchBoxes: number, alloc: Record<string, string>) {
+  function roomFor(
+    batchNumber: string,
+    batchBoxes: number,
+    alloc: Record<string, string>,
+  ) {
     const usedByOthers = Object.entries(alloc)
       .filter(([bn]) => bn !== batchNumber)
       .reduce((s, [, v]) => s + (Number(v) || 0), 0);
@@ -255,7 +294,8 @@ function ItemDetailPage() {
     const digitsOnly = raw.replace(/[^0-9]/g, "");
     setBatchAlloc((prev) => {
       const cap = roomFor(batchNumber, batchBoxes, prev);
-      const n = digitsOnly === "" ? 0 : Math.max(0, Math.min(Number(digitsOnly), cap));
+      const n =
+        digitsOnly === "" ? 0 : Math.max(0, Math.min(Number(digitsOnly), cap));
       return { ...prev, [batchNumber]: String(n) };
     });
   }
@@ -300,11 +340,8 @@ function ItemDetailPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={inStock ? "success" : "danger"}>
-                {inStock
-                  ? `${formatBoxQty(item.availableStockQty, item.piecesPerBox)} in stock`
-                  : "Out of stock"}
-              </Badge>
+              {/* No stock figure or in/out-of-stock badge here: availability is told to the dealer
+                  for the quantity they enter, below. */}
               {item.series && <Badge tone="info">{item.series}</Badge>}
               {!item.isSellable && <Badge tone="neutral">{item.status}</Badge>}
               {!item.orderable && <Badge tone="info">Inquire only</Badge>}
@@ -315,7 +352,9 @@ function ItemDetailPage() {
             {!!item.inTransitQty && (
               <p className="text-xs text-zinc-500">
                 {item.inTransitQty} more boxes in transit
-                {item.inTransitEta ? ` — expected ~${formatDate(item.inTransitEta)}` : ""}
+                {item.inTransitEta
+                  ? ` — expected ~${formatDate(item.inTransitEta)}`
+                  : ""}
               </p>
             )}
 
@@ -370,7 +409,7 @@ function ItemDetailPage() {
                 is under Quantity below, once a qty is actually entered; showing
                 it twice, before the dealer has even said how much they want,
                 was the "not friendly" complaint (client, 4 Nov 2026). */}
-            {item.topBatches.length > 0 && (
+            {SHOW_BATCH_PICKER && item.topBatches.length > 0 && (
               <div>
                 <p className="mb-1 text-xs font-medium text-zinc-400">
                   Available batches
@@ -397,9 +436,7 @@ function ItemDetailPage() {
           <Card>
             <CardContent className="space-y-3">
               <h2 className="text-sm font-semibold text-zinc-900">
-                {inStock
-                  ? "Enquire about this item"
-                  : "Raise an out-of-stock enquiry"}
+                Enquire about this item
               </h2>
               <p className="text-xs text-zinc-500">
                 Pacific will send you a quotation with the price. Add several
@@ -426,115 +463,129 @@ function ItemDetailPage() {
                   so going over is never possible -- lowering one batch's own
                   qty frees that room straight back up for the others, letting
                   a dealer re-tap/re-type a higher number into them. */}
-              {enteredBoxes > 0 && item.topBatches.length > 1 && (
-                <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
-                  <p className="text-xs font-medium text-zinc-700">
-                    Pick batch(es) for these {enteredBoxes} boxes (optional)
-                  </p>
-                  <div className="space-y-1">
-                    {item.topBatches.map((b) => {
-                      const picked = batchAlloc[b.batchNumber] !== undefined;
-                      // ISS-2026-00712, client refinement 4 Nov 2026 -- once the
-                      // qty is already fully covered by what's picked so far, an
-                      // unpicked batch has nothing left to take and is no longer
-                      // tappable (greyed out, "qty covered" shown) -- tapping it
-                      // used to silently add a dead 0-qty row, which read as
-                      // broken rather than "there's nothing left to give you."
-                      // Deselecting an already-picked batch always stays
-                      // allowed -- that's exactly how room gets freed up again.
-                      const pickable = picked || allocatedTotal < enteredBoxes;
-                      return (
-                        <div
-                          key={b.batchNumber}
-                          className={cn(
-                            "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-colors",
-                            picked
-                              ? "border-zinc-900 bg-zinc-900 text-white"
-                              : pickable
-                                ? "border-zinc-200 bg-white text-zinc-700"
-                                : "border-zinc-200 bg-zinc-100 text-zinc-500",
-                          )}
-                        >
-                          <button
-                            type="button"
-                            disabled={!pickable}
-                            onClick={() => toggleBatchPick(b)}
+              <AvailabilityNote
+                availability={availability.lines?.[0]}
+                checking={availability.isChecking}
+                piecesPerBox={item.piecesPerBox}
+              />
+              {SHOW_BATCH_PICKER &&
+                enteredBoxes > 0 &&
+                item.topBatches.length > 1 && (
+                  <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
+                    <p className="text-xs font-medium text-zinc-700">
+                      Pick batch(es) for these {enteredBoxes} boxes (optional)
+                    </p>
+                    <div className="space-y-1">
+                      {item.topBatches.map((b) => {
+                        const picked = batchAlloc[b.batchNumber] !== undefined;
+                        // ISS-2026-00712, client refinement 4 Nov 2026 -- once the
+                        // qty is already fully covered by what's picked so far, an
+                        // unpicked batch has nothing left to take and is no longer
+                        // tappable (greyed out, "qty covered" shown) -- tapping it
+                        // used to silently add a dead 0-qty row, which read as
+                        // broken rather than "there's nothing left to give you."
+                        // Deselecting an already-picked batch always stays
+                        // allowed -- that's exactly how room gets freed up again.
+                        const pickable =
+                          picked || allocatedTotal < enteredBoxes;
+                        return (
+                          <div
+                            key={b.batchNumber}
                             className={cn(
-                              "flex-1 text-left",
-                              !pickable && "cursor-not-allowed",
+                              "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-colors",
+                              picked
+                                ? "border-zinc-900 bg-zinc-900 text-white"
+                                : pickable
+                                  ? "border-zinc-200 bg-white text-zinc-700"
+                                  : "border-zinc-200 bg-zinc-100 text-zinc-500",
                             )}
                           >
-                            <span className="font-medium">
-                              {b.batchNumber}
-                              {picked && " ✓"}
-                            </span>
-                            <span
+                            <button
+                              type="button"
+                              disabled={!pickable}
+                              onClick={() => toggleBatchPick(b)}
                               className={cn(
-                                "block text-[11px]",
-                                picked
-                                  ? "text-zinc-300"
-                                  : pickable
-                                    ? "text-zinc-500"
-                                    : "text-zinc-500",
+                                "flex-1 text-left",
+                                !pickable && "cursor-not-allowed",
                               )}
                             >
-                              {pickable
-                                ? `${formatBoxQty(b.boxes, item.piecesPerBox)} available`
-                                : "Qty already covered — remove a pick above to use this one"}
-                            </span>
-                          </button>
-                          {picked && (
-                            <Input
-                              type="number"
-                              min={0}
-                              max={b.boxes}
-                              value={batchAlloc[b.batchNumber]}
-                              onChange={(e) =>
-                                setBatchQty(b.batchNumber, e.target.value, b.boxes)
-                              }
-                              className="h-8 w-16 shrink-0 bg-white text-right text-xs text-zinc-900"
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {hasAllocations && (
-                    <p
-                      className={cn(
-                        "text-xs",
-                        allocationComplete ? "text-emerald-700" : "text-amber-700",
-                      )}
-                    >
-                      {allocatedTotal} of {enteredBoxes} boxes allocated
-                      {allocatedTotal !== enteredBoxes &&
-                        ` — ${enteredBoxes - allocatedTotal} more to go`}
-                      .{" "}
-                      <button
-                        type="button"
-                        className="underline"
-                        onClick={() => setBatchAlloc({})}
+                              <span className="font-medium">
+                                {b.batchNumber}
+                                {picked && " ✓"}
+                              </span>
+                              <span
+                                className={cn(
+                                  "block text-[11px]",
+                                  picked
+                                    ? "text-zinc-300"
+                                    : pickable
+                                      ? "text-zinc-500"
+                                      : "text-zinc-500",
+                                )}
+                              >
+                                {pickable
+                                  ? `${formatBoxQty(b.boxes, item.piecesPerBox)} available`
+                                  : "Qty already covered — remove a pick above to use this one"}
+                              </span>
+                            </button>
+                            {picked && (
+                              <Input
+                                type="number"
+                                min={0}
+                                max={b.boxes}
+                                value={batchAlloc[b.batchNumber]}
+                                onChange={(e) =>
+                                  setBatchQty(
+                                    b.batchNumber,
+                                    e.target.value,
+                                    b.boxes,
+                                  )
+                                }
+                                className="h-8 w-16 shrink-0 bg-white text-right text-xs text-zinc-900"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {hasAllocations && (
+                      <p
+                        className={cn(
+                          "text-xs",
+                          allocationComplete
+                            ? "text-emerald-700"
+                            : "text-amber-700",
+                        )}
                       >
-                        Reset to Auto
-                      </button>
-                    </p>
-                  )}
-                  {pieceBatchConflict ? (
-                    <p className="text-xs text-red-600">
-                      Pcs can't be split across batches — clear the Pcs field
-                      above, or pick just one batch for this line.
-                    </p>
-                  ) : (
-                    submittableEntries.length > 1 && (
-                      <p className="text-xs text-zinc-500">
-                        Split across {submittableEntries.length} batches — use
-                        "Add to enquiry list" below, then send everything
-                        together from your enquiry list.
+                        {allocatedTotal} of {enteredBoxes} boxes allocated
+                        {allocatedTotal !== enteredBoxes &&
+                          ` — ${enteredBoxes - allocatedTotal} more to go`}
+                        .{" "}
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => setBatchAlloc({})}
+                        >
+                          Reset to Auto
+                        </button>
                       </p>
-                    )
-                  )}
-                </div>
-              )}
+                    )}
+                    {pieceBatchConflict ? (
+                      <p className="text-xs text-red-600">
+                        Pcs can't be split across batches — clear the Pcs field
+                        above, or pick just one batch for this line.
+                      </p>
+                    ) : (
+                      submittableEntries.length > 1 && (
+                        <p className="text-xs text-zinc-500">
+                          Split across {submittableEntries.length} batches — use
+                          "Add to enquiry list" below, then send everything
+                          together from your enquiry list.
+                        </p>
+                      )
+                    )}
+                  </div>
+                )}
               <label className="block text-sm font-medium text-zinc-700">
                 Remarks (optional)
                 <Input
@@ -571,7 +622,8 @@ function ItemDetailPage() {
                         code: item.code,
                         name: item.name,
                         qty: Number(qtyStr),
-                        pieces: i === 0 ? combined.pieces || undefined : undefined,
+                        pieces:
+                          i === 0 ? combined.pieces || undefined : undefined,
                         images: item.images,
                         piecesPerBox: item.piecesPerBox,
                         preferredBatchNo: batchNumber,
@@ -725,13 +777,13 @@ function ItemDetailPage() {
           </Card>
         )}
 
-        {!inStock &&
+        {(!inStock || notAvailableForQty) &&
           alternativesQuery.data &&
           alternativesQuery.data.length > 0 && (
             <Card>
               <CardContent className="space-y-2">
                 <h2 className="text-sm font-semibold text-zinc-900">
-                  Out of stock — you might also like
+                  Not available — you might also like
                 </h2>
                 <div className="space-y-2">
                   {alternativesQuery.data.map((alt) => (
@@ -755,15 +807,6 @@ function ItemDetailPage() {
                             </span>
                           )}
                         </span>
-                        <Badge
-                          tone={
-                            alt.availableStockQty > 0 ? "success" : "danger"
-                          }
-                        >
-                          {alt.availableStockQty > 0
-                            ? "In stock"
-                            : "Out of stock"}
-                        </Badge>
                       </div>
                     </Link>
                   ))}
@@ -772,7 +815,7 @@ function ItemDetailPage() {
             </Card>
           )}
 
-        {raisedInquiry && inStock && (
+        {raisedInquiry && raisedAvailable && (
           <Card>
             <CardContent className="space-y-3">
               <p className="text-sm text-zinc-700">
@@ -804,6 +847,7 @@ function ItemDetailPage() {
                     Expected dispatch date
                     <Input
                       type="date"
+                      min={todayISO()}
                       value={orderDispatchDate}
                       onChange={(e) => setOrderDispatchDate(e.target.value)}
                       className="mt-1 h-9 text-sm"
@@ -854,12 +898,14 @@ function ItemDetailPage() {
           </Card>
         )}
 
-        {raisedInquiry && !inStock && (
+        {raisedInquiry && !raisedAvailable && (
           <Card>
             <CardContent className="space-y-3">
               <p className="text-sm text-zinc-700">
                 Your enquiry <strong>{raisedInquiry.number}</strong> has been
-                logged. We'll notify you once it's back in stock.
+                logged. This quantity is not available right now, so it can't be
+                ordered directly — you can request a quotation below. We'll
+                notify you once it's back in stock.
               </p>
               {askForQuotationMutation.isSuccess ? (
                 <p className="text-sm font-medium text-emerald-600">

@@ -2,7 +2,6 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Download, Search } from "lucide-react";
-import { formatBoxQty } from "@/lib/stock-format";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -302,17 +301,18 @@ function ItemCard({
             {item.price !== null ? (
               <>
                 {formatCurrency(item.price)}
-                <span className="text-xs font-normal text-zinc-500"> / Box</span>
+                <span className="text-xs font-normal text-zinc-500">
+                  {" "}
+                  / Box
+                </span>
               </>
             ) : (
               "Price on request"
             )}
           </p>
-          <Badge tone={item.availableStockQty > 0 ? "success" : "danger"}>
-            {item.availableStockQty > 0
-              ? `${formatBoxQty(item.availableStockQty, item.piecesPerBox)} in stock`
-              : "Out of stock"}
-          </Badge>
+          {/* Stock (in stock / out of stock) is deliberately not shown in the list: whether the
+              quantity a dealer wants is available is told to them once they enter it -- on the
+              item page and in the enquiry list. */}
           {/* BRD C.3.2 -- "Transit Warehouse": not real stock, just visibility that more is
               already on the way, so a 0-in-stock item doesn't read as a dead end. */}
           {!!item.inTransitQty && (

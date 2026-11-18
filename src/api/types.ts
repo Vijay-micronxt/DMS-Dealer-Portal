@@ -131,6 +131,10 @@ export type InquiryItemRow = {
    * on every response this type appears in (raiseInquiry(ies) and the dealer-facing
    * get/list calls each compute it their own way). */
   orderable?: boolean;
+  /** Whether this row's quantity can be supplied right now. A line that isn't can still be
+   * enquired on or quoted, but never turned into an order -- Create order is hidden, and
+   * convertToOrder refuses it as the real gate. */
+  available?: boolean;
 };
 
 /** 12 Nov 2026 rebuild (BRD D.3) -- one Inquiry, genuinely holding every item the dealer

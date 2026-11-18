@@ -10,9 +10,14 @@ import { Input } from "@/components/ui/input";
 import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { BoxesPiecesFields } from "@/components/ui/boxes-pieces-fields";
 import { ApiError } from "@/lib/erp-client";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, todayISO } from "@/lib/utils";
 import { formatBoxQty } from "@/lib/stock-format";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useAvailability } from "@/api/availability";
+import {
+  AvailabilityNote,
+  NOT_AVAILABLE_HINT,
+} from "@/components/availability-note";
 import { getCatalog, resolveCode } from "@/api/catalog";
 import {
   addToEnquiryList,
@@ -88,8 +93,12 @@ function EnquiryListPage() {
   const [orderPo, setOrderPo] = React.useState("");
   const [orderDispatchDate, setOrderDispatchDate] = React.useState("");
   const [orderError, setOrderError] = React.useState<string | null>(null);
+  // An order needs every line to be both set up for this dealer AND available in the quantity
+  // asked for. A line that isn't available can still be quoted -- it just can't be ordered.
   const allOrderable =
-    sentItems.length > 0 && sentItems.every((i) => i.orderable);
+    sentItems.length > 0 &&
+    sentItems.every((i) => i.orderable && i.available !== false);
+  const someUnavailable = sentItems.some((i) => i.available === false);
   const createOrderMutation = useMutation({
     mutationFn: () =>
       convertToOrder({
@@ -113,6 +122,16 @@ function EnquiryListPage() {
   // catches it before Send instead of letting a failed round-trip be the first
   // warning (the item page's own picker already prevents it going in, but a
   // line can still be bumped up after the fact).
+  // "Available" / "Not available" per line, for the quantity typed on it.
+  const availability = useAvailability(
+    lines.map((l) => ({
+      item: l.code,
+      qty: l.pieces ?? 0,
+      enteredBoxes: l.qty,
+      damagedStock: l.damagedStock,
+    })),
+  );
+
   const overBatchLine = lines.find(
     (l) => l.batchMaxBoxes !== undefined && l.qty > l.batchMaxBoxes,
   );
@@ -137,9 +156,11 @@ function EnquiryListPage() {
                 {!createOrderMutation.isSuccess && (
                   <>
                     {" "}
-                    {!allOrderable || askForQuotationMutation.isSuccess
-                      ? "Pacific will send you a quotation — you can accept it there to place the order."
-                      : "Create an order now, or ask Pacific for a quotation first."}
+                    {someUnavailable
+                      ? `Some items aren't available in the quantity you asked for, so this can't be ordered directly. Ask for a quotation below — Pacific will send you a quotation — you can accept it there to place the order.`
+                      : !allOrderable || askForQuotationMutation.isSuccess
+                        ? "Pacific will send you a quotation — you can accept it there to place the order."
+                        : "Create an order now, or ask Pacific for a quotation first."}
                   </>
                 )}
               </p>
@@ -168,6 +189,7 @@ function EnquiryListPage() {
                       Expected dispatch date
                       <Input
                         type="date"
+                        min={todayISO()}
                         value={orderDispatchDate}
                         onChange={(e) => setOrderDispatchDate(e.target.value)}
                         className="mt-1 h-9 text-sm"
@@ -227,20 +249,22 @@ function EnquiryListPage() {
         ) : (
           <>
             <div className="space-y-3">
-              {lines.map((line) => (
+              {lines.map((line, index) => (
                 <Card
                   key={`${line.code}-${line.damagedStock ? "damaged" : "regular"}-${line.preferredBatchNo ?? "auto"}`}
                 >
                   <CardContent className="space-y-1.5">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-3">
                       <ClickableThumbnail
                         images={line.images ?? []}
-                        className="h-12 w-12"
+                        className="h-12 w-12 shrink-0"
                         alt={line.name}
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate text-sm font-medium text-zinc-900">
+                        <div className="flex items-start gap-1.5">
+                          {/* The whole name, wrapped: on a phone it shares the row only with
+                              the thumbnail and the delete button, not the quantity boxes. */}
+                          <p className="text-sm font-medium break-words text-zinc-900">
                             {line.name}
                           </p>
                           {line.damagedStock && (
@@ -249,38 +273,20 @@ function EnquiryListPage() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-zinc-500">
-                          {line.code}
-                          {/* ISS-2026-00712 -- shown so a dealer who picked a specific
-                            batch on the item page can see it stuck, before sending. */}
-                          {line.preferredBatchNo && (
-                            <> · Batch {line.preferredBatchNo}</>
-                          )}
-                        </p>
+                        {(line.code !== line.name || line.preferredBatchNo) && (
+                          <p className="text-xs break-words text-zinc-500">
+                            {line.code !== line.name && line.code}
+                            {/* ISS-2026-00712 -- shown so a dealer who picked a specific
+                              batch on the item page can see it stuck, before sending. */}
+                            {line.preferredBatchNo && (
+                              <>
+                                {line.code !== line.name ? " · " : ""}Batch{" "}
+                                {line.preferredBatchNo}
+                              </>
+                            )}
+                          </p>
+                        )}
                       </div>
-                      <BoxesPiecesFields
-                        boxes={line.qty ? String(line.qty) : ""}
-                        pieces={line.pieces ? String(line.pieces) : ""}
-                        onBoxesChange={(v) =>
-                          setEnquiryQty(
-                            line.code,
-                            Number(v) || 0,
-                            line.damagedStock,
-                            line.preferredBatchNo,
-                          )
-                        }
-                        onPiecesChange={(v) =>
-                          setEnquiryPieces(
-                            line.code,
-                            Number(v) || 0,
-                            line.damagedStock,
-                            line.preferredBatchNo,
-                          )
-                        }
-                        piecesPerBox={line.piecesPerBox}
-                        className="w-auto shrink-0"
-                        inputClassName="h-9 w-20 text-sm"
-                      />
                       <button
                         aria-label={`Remove ${line.name}`}
                         onClick={() =>
@@ -295,6 +301,34 @@ function EnquiryListPage() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
+                    <BoxesPiecesFields
+                      boxes={line.qty ? String(line.qty) : ""}
+                      pieces={line.pieces ? String(line.pieces) : ""}
+                      onBoxesChange={(v) =>
+                        setEnquiryQty(
+                          line.code,
+                          Number(v) || 0,
+                          line.damagedStock,
+                          line.preferredBatchNo,
+                        )
+                      }
+                      onPiecesChange={(v) =>
+                        setEnquiryPieces(
+                          line.code,
+                          Number(v) || 0,
+                          line.damagedStock,
+                          line.preferredBatchNo,
+                        )
+                      }
+                      piecesPerBox={line.piecesPerBox}
+                      className="w-full"
+                      inputClassName="h-9 text-sm"
+                    />
+                    <AvailabilityNote
+                      availability={availability.lines?.[index]}
+                      checking={availability.isChecking}
+                      piecesPerBox={line.piecesPerBox}
+                    />
                     {/* ISS-2026-00712, client report 5 Nov 2026 -- a batch-tied line
                       edited past that batch's own on-hand qty right here, caught
                       before Send rather than only on a failed round-trip. */}
@@ -476,18 +510,25 @@ function AddItem({
                         : "Price on request"}
                     </span>
                     <span className="text-zinc-400"> · </span>
+                    {/* Only "Available" / "Not available" -- never the stock figure. Judged
+                        again against the quantity once it's entered on the line above. */}
                     <span
                       className={
-                        item.availableStockQty > 0
+                        item.availableStockQty > 0 && item.isSellable
                           ? "text-emerald-600"
                           : "text-rose-600"
                       }
                     >
-                      {item.availableStockQty > 0
-                        ? `${formatBoxQty(item.availableStockQty, item.piecesPerBox)} in stock`
-                        : "Out of stock"}
+                      {item.availableStockQty > 0 && item.isSellable
+                        ? "Available"
+                        : "Not available"}
                     </span>
                   </p>
+                  {!(item.availableStockQty > 0 && item.isSellable) && (
+                    <p className="text-xs text-zinc-500">
+                      {NOT_AVAILABLE_HINT}
+                    </p>
+                  )}
                 </div>
                 <Button
                   variant={added ? "ghost" : "outline"}
