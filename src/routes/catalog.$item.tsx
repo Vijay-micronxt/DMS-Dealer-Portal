@@ -17,7 +17,11 @@ import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { addToEnquiryList } from "@/lib/enquiry-list";
 import { useAvailability } from "@/api/availability";
-import { AvailabilityNote } from "@/components/availability-note";
+import {
+  AvailabilityNote,
+  arrivalPhrase,
+  daysUntil,
+} from "@/components/availability-note";
 import { getExcludedStock, getItem, suggestAlternatives } from "@/api/catalog";
 import {
   convertToOrder,
@@ -351,10 +355,11 @@ function ItemDetailPage() {
                 end. Never folded into availableStockQty above. */}
             {!!item.inTransitQty && (
               <p className="text-xs text-zinc-500">
-                {item.inTransitQty} more boxes in transit
-                {item.inTransitEta
-                  ? ` — expected ~${formatDate(item.inTransitEta)}`
-                  : ""}
+                {item.inTransitQty} more Box will be available{" "}
+                {arrivalPhrase(
+                  daysUntil(item.inTransitEta),
+                  item.inTransitEta ?? null,
+                )}
               </p>
             )}
 

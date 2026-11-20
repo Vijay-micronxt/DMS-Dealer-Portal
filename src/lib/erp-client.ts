@@ -148,6 +148,36 @@ export async function callMethod<T>(
 }
 
 /**
+ * Calls a whitelisted method that expects a file upload -- multipart/form-data, not JSON, so it
+ * doesn't go through callMethod. The file goes in a form field named "file"; every key in
+ * `fields` is an ordinary form field beside it (Frappe reads them as the method's parameters).
+ * The Content-Type header is left unset on purpose: the browser must add the multipart
+ * boundary itself.
+ */
+export async function uploadFile<T>(
+  path: string,
+  file: File,
+  fields: Record<string, string>,
+  token: string | null,
+): Promise<T> {
+  const base = apiBase();
+  if (!base) {
+    throw new ApiError("VITE_ERP_API_BASE_URL is not configured.", 0);
+  }
+  const form = new FormData();
+  form.append("file", file);
+  for (const [key, value] of Object.entries(fields)) form.append(key, value);
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${base}/api/method/${path}`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  return handleResponse<T>(res);
+}
+
+/**
  * Some list endpoints on this backend return a bare array; others return a paginated envelope
  * (`{ items, total, limit, offset }`). Normalize either shape to a plain array so callers don't
  * crash calling `.find`/`.map` on a non-array.

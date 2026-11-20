@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { ItemThumbnail } from "@/components/ui/image-gallery";
 import { Input } from "@/components/ui/input";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+import { arrivalPhrase, daysUntil } from "@/components/availability-note";
 import { EnquiryListLink } from "@/components/EnquiryListLink";
 import { exportMyCatalog, getCatalog, resolveCode } from "@/api/catalog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -317,8 +318,11 @@ function ItemCard({
               already on the way, so a 0-in-stock item doesn't read as a dead end. */}
           {!!item.inTransitQty && (
             <p className="text-right text-[11px] text-zinc-500">
-              {item.inTransitQty} in transit
-              {item.inTransitEta ? ` ~${formatDate(item.inTransitEta)}` : ""}
+              {item.inTransitQty} Box will be available{" "}
+              {arrivalPhrase(
+                daysUntil(item.inTransitEta),
+                item.inTransitEta ?? null,
+              )}
             </p>
           )}
           {!item.orderable && (

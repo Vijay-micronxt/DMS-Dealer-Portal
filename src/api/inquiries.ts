@@ -53,6 +53,8 @@ export function raiseInquiries(params: {
     preferredBatchNo?: string | undefined;
   }[];
   remarks?: string | undefined;
+  /** The dealer's own PO number, if they gave one on the send screen (optional). */
+  customerPo?: string | undefined;
 }): Promise<{
   requestGroup: string;
   enquiry: string;
@@ -60,7 +62,11 @@ export function raiseInquiries(params: {
 }> {
   return authedCall("dms_erp.sales.dealer_portal_api.raise_inquiries", {
     method: "POST",
-    params: { items: JSON.stringify(params.items), remarks: params.remarks },
+    params: {
+      items: JSON.stringify(params.items),
+      remarks: params.remarks,
+      customer_po: params.customerPo,
+    },
   });
 }
 
