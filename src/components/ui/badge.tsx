@@ -43,6 +43,7 @@ export function toneForStatus(status: string): BadgeTone {
     "Partially Available",
     "Pre-order Required",
     "Quoted",
+    "Draft",
     "Confirmed",
     "Picking",
     "Ready to Dispatch",

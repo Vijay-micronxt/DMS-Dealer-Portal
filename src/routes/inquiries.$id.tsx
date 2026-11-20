@@ -12,6 +12,8 @@ import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { formatDate, todayISO } from "@/lib/utils";
 import { ApiError } from "@/lib/erp-client";
 import { itemLabel } from "@/lib/item-label";
+import { PoAttachment } from "@/components/po-attachment";
+import { poIsMissing, useMyPo } from "@/api/customerPo";
 import {
   convertToOrder,
   getMyEnquiry,
@@ -51,6 +53,9 @@ function EnquiryDetailPage() {
   const [orderPo, setOrderPo] = React.useState("");
   const [orderDispatchDate, setOrderDispatchDate] = React.useState("");
   const [orderError, setOrderError] = React.useState<string | null>(null);
+  // The PO attached to this enquiry is reused on the order; where the site requires one, the
+  // button waits for it (the server refuses the order without it either way).
+  const po = useMyPo(id);
   const createOrderMutation = useMutation({
     mutationFn: () =>
       convertToOrder({
@@ -261,9 +266,10 @@ function EnquiryDetailPage() {
                                 : "Create an order now, or ask Pacific for a quotation first."}
                     </p>
 
-                    {createOrderMutation.isSuccess ? (
+                    {createOrderMutation.isSuccess ||
+                    enquiry.linkedSalesOrder ? (
                       <p className="text-sm font-medium text-emerald-600">
-                        Order created.
+                        Order sent — Pacific will check it and confirm.
                       </p>
                     ) : (
                       // BRD C.13.1, re-enabled 2 Nov 2026 -- hidden once a quotation's
@@ -272,6 +278,7 @@ function EnquiryDetailPage() {
                       allOrderable &&
                       !quotationAsked && (
                         <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
+                          <PoAttachment inquiry={id} />
                           <label className="block text-xs font-medium text-zinc-700">
                             Your PO number
                             <Input
@@ -301,7 +308,11 @@ function EnquiryDetailPage() {
                             variant="secondary"
                             onClick={() => createOrderMutation.mutate()}
                             loading={createOrderMutation.isPending}
-                            disabled={!orderPo.trim() || !orderDispatchDate}
+                            disabled={
+                              !orderPo.trim() ||
+                              !orderDispatchDate ||
+                              poIsMissing(po.data)
+                            }
                           >
                             Create order
                           </Button>
@@ -316,7 +327,8 @@ function EnquiryDetailPage() {
                         Quotation requested — Pacific will follow up.
                       </p>
                     ) : (
-                      !createOrderMutation.isSuccess && (
+                      !createOrderMutation.isSuccess &&
+                      !enquiry.linkedSalesOrder && (
                         <Button
                           size="sm"
                           variant="outline"

@@ -7,6 +7,7 @@ import { Badge, toneForStatus } from "@/components/ui/badge";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { listMyOrders } from "@/api/orders";
+import { orderStageLabel } from "@/lib/order-stage";
 
 // Client refinement, 27 Oct 2026 — collapsed from the full stage list (which needed
 // horizontal scrolling to see) down to 2 tabs. "Open" isn't a real Sales Order stage;
@@ -86,7 +87,9 @@ function OrdersPage() {
                       {formatDate(order.date)} · {formatCurrency(order.total)}
                     </p>
                   </div>
-                  <Badge tone={toneForStatus(order.stage)}>{order.stage}</Badge>
+                  <Badge tone={toneForStatus(order.stage)}>
+                    {orderStageLabel(order.stage)}
+                  </Badge>
                 </CardContent>
               </Card>
             </Link>
