@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { clearEnquiryList } from "@/lib/enquiry-list";
-import { ApiError, callMethod } from "@/lib/erp-client";
+import { ApiError, callMethod, uploadFile } from "@/lib/erp-client";
 
 type AuthedCallOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";
@@ -333,4 +333,14 @@ export async function authedCall<T>(
 ): Promise<T> {
   const token = await authToken();
   return callMethod<T>(path, { ...opts, token });
+}
+
+/** authedCall's multipart sibling, for the one place a dealer sends a file (their PO). */
+export async function authedUpload<T>(
+  path: string,
+  file: File,
+  fields: Record<string, string> = {},
+): Promise<T> {
+  const token = await authToken();
+  return uploadFile<T>(path, file, fields, token);
 }

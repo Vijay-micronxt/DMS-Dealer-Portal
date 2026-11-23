@@ -14,11 +14,25 @@ export type LineAvailability = {
   item: string;
   /** The quantity asked for, in boxes (Pcs rounded up to a whole box). */
   boxes: number;
-  /** Judged against the quantity asked for -- there is no "partly available". */
+  /** True only when the WHOLE quantity asked for can be supplied -- the order gate reads this,
+   * so a partly-available line is false here and still not orderable. */
   available: boolean;
-  /** The batch(es) the system will draw this quantity from, and how many boxes from
-   * each. Only what was asked for -- never a batch's own stock. Empty when not available. */
+  /** How many of those boxes can be supplied now (all of them when `available`). Never more than
+   * `boxes` -- it is the part of the dealer's own quantity, not a stock figure. */
+  availableBoxes: number;
+  shortfallBoxes: number;
+  /** The batch(es) the system will draw the available boxes from, and how many from each.
+   * Only what was asked for -- never a batch's own stock. Empty when nothing is available. */
   batches: { batchNumber: string; boxes: number }[];
+  /** Stock already on an open purchase order. `boxes`/`eta`/`days` describe the first arrival
+   * only; `totalBoxes` is everything on order. `days` is 0 when it is due now or late, and null
+   * when the order has no expected date. */
+  inTransit: {
+    boxes: number;
+    eta: string | null;
+    days: number | null;
+    totalBoxes: number;
+  } | null;
 };
 
 export function checkAvailability(

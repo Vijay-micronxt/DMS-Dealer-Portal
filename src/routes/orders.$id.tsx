@@ -10,6 +10,7 @@ import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cancelMyOrder, getMyOrder } from "@/api/orders";
+import { orderStageLabel } from "@/lib/order-stage";
 import { ApiError } from "@/lib/erp-client";
 
 export const Route = createFileRoute("/orders/$id")({
@@ -18,7 +19,7 @@ export const Route = createFileRoute("/orders/$id")({
 
 // Stages where a cancel attempt can never succeed — hide the button rather than
 // let the dealer hit an error that's always the same, every time, for this order.
-const CANCEL_HIDDEN_STAGES = new Set(["Delivered", "Cancelled"]);
+const CANCEL_HIDDEN_STAGES = new Set(["Delivered", "Cancelled", "Draft"]);
 
 function OrderDetailPage() {
   const { id } = Route.useParams();
@@ -103,7 +104,9 @@ function OrderDetailPage() {
                   {formatDate(order.date)}
                 </p>
               </div>
-              <Badge tone={toneForStatus(order.stage)}>{order.stage}</Badge>
+              <Badge tone={toneForStatus(order.stage)}>
+                {orderStageLabel(order.stage)}
+              </Badge>
             </div>
 
             <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -126,6 +129,14 @@ function OrderDetailPage() {
                 </div>
               )}
             </dl>
+
+            {order.stage === "Draft" && (
+              <p className="border-t border-zinc-200 pt-3 text-sm text-amber-700">
+                Your order has been sent to Pacific. They will check it and the
+                PO you attached, then confirm it — you will see it here move to
+                Confirmed.
+              </p>
+            )}
 
             {pendingApprovalNotice && (
               <p className="border-t border-zinc-200 pt-3 text-sm text-amber-700">

@@ -30,7 +30,7 @@ function LoginPage() {
   const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
-    if (user) navigate({ to: search.redirect ?? "/catalog" });
+    if (user) navigate({ to: search.redirect ?? "/enquiry" });
   }, [user, navigate, search.redirect]);
 
   function switchMethod(next: "otp" | "password") {
@@ -46,7 +46,7 @@ function LoginPage() {
     setSubmitting(true);
     try {
       await loginWithPassword(email.trim(), password);
-      navigate({ to: search.redirect ?? "/catalog" });
+      navigate({ to: search.redirect ?? "/enquiry" });
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -84,7 +84,7 @@ function LoginPage() {
     setSubmitting(true);
     try {
       await verifyOtp(phone.trim(), otp.trim());
-      navigate({ to: search.redirect ?? "/catalog" });
+      navigate({ to: search.redirect ?? "/enquiry" });
     } catch (err) {
       setError(
         err instanceof ApiError
