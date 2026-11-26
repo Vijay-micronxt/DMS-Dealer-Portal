@@ -12,6 +12,8 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { cancelMyOrder, getMyOrder } from "@/api/orders";
 import { orderStageLabel } from "@/lib/order-stage";
 import { ApiError } from "@/lib/erp-client";
+import { usePermissions } from "@/hooks/use-permissions";
+import { NoAccess } from "@/components/NoAccess";
 
 export const Route = createFileRoute("/orders/$id")({
   component: OrderDetailPage,
@@ -30,9 +32,12 @@ function OrderDetailPage() {
     string | null
   >(null);
 
+  const { can } = usePermissions();
+  const showPrice = can("see_price");
   const query = useQuery({
     queryKey: ["order", id],
     queryFn: () => getMyOrder(id),
+    enabled: can("view_orders"),
   });
 
   // ISS-2026-00634: within the first 24 hours of placing the order, cancelling is
@@ -61,6 +66,8 @@ function OrderDetailPage() {
       );
     },
   });
+
+  if (!can("view_orders")) return <NoAccess what="view sales orders" />;
 
   if (query.isLoading) {
     return (
@@ -241,40 +248,46 @@ function OrderDetailPage() {
                         )}
                     </p>
                   </div>
-                  <p className="font-medium text-zinc-900">
-                    {formatCurrency(line.amount ?? line.rate * line.qty)}
-                  </p>
+                  {showPrice && (
+                    <p className="font-medium text-zinc-900">
+                      {formatCurrency(line.amount ?? line.rate * line.qty)}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
-            <dl className="space-y-1.5 border-t border-zinc-200 pt-2 text-sm">
-              {order.netTotal !== undefined && (
-                <div className="flex justify-between text-zinc-600">
-                  <dt>Items total</dt>
-                  <dd className="tabular-nums text-zinc-900">
-                    {formatCurrency(order.netTotal)}
+            {showPrice && (
+              <dl className="space-y-1.5 border-t border-zinc-200 pt-2 text-sm">
+                {order.netTotal !== undefined && (
+                  <div className="flex justify-between text-zinc-600">
+                    <dt>Items total</dt>
+                    <dd className="tabular-nums text-zinc-900">
+                      {formatCurrency(order.netTotal)}
+                    </dd>
+                  </div>
+                )}
+                {(order.taxes ?? []).map((t, i) => (
+                  <div
+                    key={`${t.description}-${i}`}
+                    className="flex justify-between text-zinc-600"
+                  >
+                    <dt>
+                      {t.description}
+                      {t.rate ? ` (${t.rate}%)` : ""}
+                    </dt>
+                    <dd className="tabular-nums text-zinc-900">
+                      {formatCurrency(t.amount)}
+                    </dd>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold text-zinc-900">
+                  <dt>Total</dt>
+                  <dd className="tabular-nums">
+                    {formatCurrency(order.total)}
                   </dd>
                 </div>
-              )}
-              {(order.taxes ?? []).map((t, i) => (
-                <div
-                  key={`${t.description}-${i}`}
-                  className="flex justify-between text-zinc-600"
-                >
-                  <dt>
-                    {t.description}
-                    {t.rate ? ` (${t.rate}%)` : ""}
-                  </dt>
-                  <dd className="tabular-nums text-zinc-900">
-                    {formatCurrency(t.amount)}
-                  </dd>
-                </div>
-              ))}
-              <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold text-zinc-900">
-                <dt>Total</dt>
-                <dd className="tabular-nums">{formatCurrency(order.total)}</dd>
-              </div>
-            </dl>
+              </dl>
+            )}
           </CardContent>
         </Card>
 
@@ -302,9 +315,11 @@ function OrderDetailPage() {
                         {formatDate(inv.date)} · {inv.status}
                       </p>
                     </div>
-                    <p className="font-medium text-zinc-900">
-                      {formatCurrency(inv.grandTotal)}
-                    </p>
+                    {showPrice && (
+                      <p className="font-medium text-zinc-900">
+                        {formatCurrency(inv.grandTotal)}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>

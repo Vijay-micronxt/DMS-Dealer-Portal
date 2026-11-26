@@ -8,6 +8,8 @@ import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { listMyOrders } from "@/api/orders";
 import { orderStageLabel } from "@/lib/order-stage";
+import { usePermissions } from "@/hooks/use-permissions";
+import { NoAccess } from "@/components/NoAccess";
 
 // Client refinement, 27 Oct 2026 — collapsed from the full stage list (which needed
 // horizontal scrolling to see) down to 2 tabs. "Open" isn't a real Sales Order stage;
@@ -27,6 +29,8 @@ export const Route = createFileRoute("/orders/")({
 });
 
 function OrdersPage() {
+  const { can } = usePermissions();
+  const showPrice = can("see_price");
   const [tab, setTab] = React.useState<Tab>("Open");
 
   const query = useQuery({
@@ -37,7 +41,10 @@ function OrdersPage() {
         stageGroup: tab === "Open" ? "open" : undefined,
         limit: 50,
       }),
+    enabled: can("view_orders"),
   });
+
+  if (!can("view_orders")) return <NoAccess what="view sales orders" />;
 
   return (
     <AppShell>
@@ -84,7 +91,8 @@ function OrdersPage() {
                       {order.number}
                     </p>
                     <p className="text-xs text-zinc-500">
-                      {formatDate(order.date)} · {formatCurrency(order.total)}
+                      {formatDate(order.date)}
+                      {showPrice && <> · {formatCurrency(order.total)}</>}
                     </p>
                   </div>
                   <Badge tone={toneForStatus(order.stage)}>

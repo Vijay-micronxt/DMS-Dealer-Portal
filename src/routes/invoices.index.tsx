@@ -11,6 +11,8 @@ import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { listMyInvoices } from "@/api/invoices";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { usePermissions } from "@/hooks/use-permissions";
+import { NoAccess } from "@/components/NoAccess";
 
 const PAGE_SIZE = 30;
 
@@ -21,6 +23,8 @@ export const Route = createFileRoute("/invoices/")({
 /** The dealer's own Sales Invoices, newest first -- including the history migrated from
  * Tally, which can run to thousands, so it pages rather than loading everything. */
 function InvoicesPage() {
+  const { can } = usePermissions();
+  const showPrice = can("see_price");
   const [query, setQuery] = React.useState("");
   const debounced = useDebouncedValue(query, 300);
 
@@ -37,12 +41,15 @@ function InvoicesPage() {
       const fetched = lastPage.offset + lastPage.items.length;
       return fetched < lastPage.total ? fetched : undefined;
     },
+    enabled: can("view_invoices"),
   });
 
   const items = React.useMemo(
     () => invoicesQuery.data?.pages.flatMap((p) => p.items) ?? [],
     [invoicesQuery.data],
   );
+
+  if (!can("view_invoices")) return <NoAccess what="view invoices" />;
 
   return (
     <AppShell>
@@ -87,9 +94,11 @@ function InvoicesPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="text-sm font-semibold tabular-nums text-zinc-900">
-                      {formatCurrency(inv.grandTotal)}
-                    </span>
+                    {showPrice && (
+                      <span className="text-sm font-semibold tabular-nums text-zinc-900">
+                        {formatCurrency(inv.grandTotal)}
+                      </span>
+                    )}
                     {inv.type !== "Sales" && (
                       <Badge tone="info">{inv.type}</Badge>
                     )}

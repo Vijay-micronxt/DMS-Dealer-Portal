@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { usePermissions } from "@/hooks/use-permissions";
+import { NoAccess } from "@/components/NoAccess";
 import { getMyInvoice } from "@/api/invoices";
 
 export const Route = createFileRoute("/invoices/$id")({
@@ -24,10 +26,15 @@ const TRANSPORT_LABELS: Record<string, string> = {
 
 function InvoiceDetailPage() {
   const { id } = Route.useParams();
+  const { can } = usePermissions();
+  const showPrice = can("see_price");
   const query = useQuery({
     queryKey: ["invoice", id],
     queryFn: () => getMyInvoice(id),
+    enabled: can("view_invoices"),
   });
+
+  if (!can("view_invoices")) return <NoAccess what="view invoices" />;
 
   if (query.isLoading) {
     return (
@@ -122,48 +129,53 @@ function InvoiceDetailPage() {
                       {row.itemName || row.itemCode}
                     </Link>
                     <p className="text-xs text-zinc-500">
-                      {row.qty} {row.uom ?? ""} × {formatCurrency(row.rate)}
+                      {row.qty} {row.uom ?? ""}
+                      {showPrice && ` × ${formatCurrency(row.rate)}`}
                       {row.batchNo ? ` · Batch ${row.batchNo}` : ""}
                     </p>
                   </div>
-                  <p className="shrink-0 font-medium tabular-nums text-zinc-900">
-                    {formatCurrency(row.amount)}
-                  </p>
+                  {showPrice && (
+                    <p className="shrink-0 font-medium tabular-nums text-zinc-900">
+                      {formatCurrency(row.amount)}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
-            <dl className="space-y-1.5 border-t border-zinc-200 pt-3 text-sm">
-              <div className="flex justify-between text-zinc-600">
-                <dt>Subtotal</dt>
-                <dd className="tabular-nums text-zinc-900">
-                  {formatCurrency(inv.netTotal)}
-                </dd>
-              </div>
-              {inv.taxes.map((t, i) => (
-                <div
-                  key={`${t.description}-${i}`}
-                  className="flex justify-between text-zinc-600"
-                >
-                  <dt>
-                    {t.description}
-                    {t.rate ? ` (${t.rate}%)` : ""}
-                  </dt>
+            {showPrice && (
+              <dl className="space-y-1.5 border-t border-zinc-200 pt-3 text-sm">
+                <div className="flex justify-between text-zinc-600">
+                  <dt>Subtotal</dt>
                   <dd className="tabular-nums text-zinc-900">
-                    {formatCurrency(t.amount)}
+                    {formatCurrency(inv.netTotal)}
                   </dd>
                 </div>
-              ))}
-              <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold text-zinc-900">
-                <dt>Total</dt>
-                <dd className="tabular-nums">
-                  {formatCurrency(inv.grandTotal)}
-                </dd>
-              </div>
-            </dl>
+                {inv.taxes.map((t, i) => (
+                  <div
+                    key={`${t.description}-${i}`}
+                    className="flex justify-between text-zinc-600"
+                  >
+                    <dt>
+                      {t.description}
+                      {t.rate ? ` (${t.rate}%)` : ""}
+                    </dt>
+                    <dd className="tabular-nums text-zinc-900">
+                      {formatCurrency(t.amount)}
+                    </dd>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold text-zinc-900">
+                  <dt>Total</dt>
+                  <dd className="tabular-nums">
+                    {formatCurrency(inv.grandTotal)}
+                  </dd>
+                </div>
+              </dl>
+            )}
           </CardContent>
         </Card>
 
-        {inv.receipts.length > 0 && (
+        {showPrice && inv.receipts.length > 0 && (
           <Card>
             <CardContent className="space-y-2">
               <h2 className="text-sm font-semibold text-zinc-900">

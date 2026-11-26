@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useEnquiryList } from "@/lib/enquiry-list";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Spinner } from "@/components/ui/spinner";
 import { SetCredentialsPrompt } from "@/components/SetCredentialsPrompt";
 
@@ -41,12 +42,19 @@ function EnquiryListHeaderLink() {
   );
 }
 
+/** `needs` hides a tab from a person whose dealer role lacks that permission (the server
+ * enforces it as well -- this only keeps the portal from offering a screen that would refuse). */
 const NAV_ITEMS = [
   { to: "/catalog", label: "Catalog", icon: Store },
   { to: "/inquiries", label: "Enquiries", icon: MessageSquareText },
-  { to: "/quotations", label: "Quotes", icon: FileText },
-  { to: "/orders", label: "Orders", icon: Package },
-  { to: "/invoices", label: "Invoices", icon: Receipt },
+  {
+    to: "/quotations",
+    label: "Quotes",
+    icon: FileText,
+    needs: "view_quotations",
+  },
+  { to: "/orders", label: "Orders", icon: Package, needs: "view_orders" },
+  { to: "/invoices", label: "Invoices", icon: Receipt, needs: "view_invoices" },
   { to: "/profile", label: "Profile", icon: CircleUser },
 ] as const;
 
@@ -59,6 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, authPending } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { can } = usePermissions();
 
   React.useEffect(() => {
     if (!authPending && !user) {
@@ -89,22 +98,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <SetCredentialsPrompt />
 
       <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-xl border-t border-zinc-200 bg-white">
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
-          const active = pathname === to || pathname.startsWith(`${to}/`);
-          return (
-            <Link
-              key={to}
-              to={to}
-              className={cn(
-                "flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium",
-                active ? "text-zinc-900" : "text-zinc-400",
-              )}
-            >
-              <Icon className="h-5 w-5" strokeWidth={active ? 2.5 : 2} />
-              {label}
-            </Link>
-          );
-        })}
+        {NAV_ITEMS.filter((item) => !("needs" in item) || can(item.needs)).map(
+          ({ to, label, icon: Icon }) => {
+            const active = pathname === to || pathname.startsWith(`${to}/`);
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={cn(
+                  "flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium",
+                  active ? "text-zinc-900" : "text-zinc-400",
+                )}
+              >
+                <Icon className="h-5 w-5" strokeWidth={active ? 2.5 : 2} />
+                {label}
+              </Link>
+            );
+          },
+        )}
       </nav>
     </div>
   );

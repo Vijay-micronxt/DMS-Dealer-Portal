@@ -19,6 +19,7 @@ import {
   getMyEnquiry,
   requestQuotation,
 } from "@/api/inquiries";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const TERMINAL_STATUSES = new Set(["Converted to Order", "Rejected", "Closed"]);
 
@@ -56,6 +57,9 @@ function EnquiryDetailPage() {
   // The PO attached to this enquiry is reused on the order; where the site requires one, the
   // button waits for it (the server refuses the order without it either way).
   const po = useMyPo(id);
+  // A role that may not raise orders is offered the quotation request only (server refuses too).
+  const { can } = usePermissions();
+  const canRaise = can("raise_order");
   const createOrderMutation = useMutation({
     mutationFn: () =>
       convertToOrder({
@@ -263,7 +267,9 @@ function EnquiryDetailPage() {
                               ? "Pacific will send you a quotation with the prices. Accept it there to place the order."
                               : quotationAsked
                                 ? "Pacific will send you a quotation with the prices. Accept it there to place the order."
-                                : "Create an order now, or ask Pacific for a quotation first."}
+                                : canRaise
+                                  ? "Create an order now, or ask Pacific for a quotation first."
+                                  : "Ask Pacific for a quotation."}
                     </p>
 
                     {createOrderMutation.isSuccess ||
@@ -275,6 +281,7 @@ function EnquiryDetailPage() {
                       // BRD C.13.1, re-enabled 2 Nov 2026 -- hidden once a quotation's
                       // been asked for (Pacific is then the one pricing this), same
                       // mirrored guard the item page and cart already use.
+                      canRaise &&
                       allOrderable &&
                       !quotationAsked && (
                         <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
