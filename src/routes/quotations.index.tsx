@@ -7,6 +7,8 @@ import { Badge, toneForStatus } from "@/components/ui/badge";
 import { Spinner, ErrorState } from "@/components/ui/spinner";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { listMyQuotations } from "@/api/quotations";
+import { usePermissions } from "@/hooks/use-permissions";
+import { NoAccess } from "@/components/NoAccess";
 
 export const Route = createFileRoute("/quotations/")({
   component: QuotationsPage,
@@ -15,10 +17,15 @@ export const Route = createFileRoute("/quotations/")({
 /** What Pacific has quoted this dealer. The price appears here (and nowhere before it);
  * accepting a quotation is what places the order. */
 function QuotationsPage() {
+  const { can } = usePermissions();
+  const showPrice = can("see_price");
   const query = useQuery({
     queryKey: ["my-quotations"],
     queryFn: () => listMyQuotations({ limit: 50 }),
+    enabled: can("view_quotations"),
   });
+
+  if (!can("view_quotations")) return <NoAccess what="view quotations" />;
 
   return (
     <AppShell>
@@ -50,8 +57,8 @@ function QuotationsPage() {
                     </p>
                     <p className="text-xs text-zinc-500">
                       {formatDate(q.date)} · {q.lines.length} item
-                      {q.lines.length === 1 ? "" : "s"} ·{" "}
-                      {formatCurrency(q.totalPayable)}
+                      {q.lines.length === 1 ? "" : "s"}
+                      {showPrice && <> · {formatCurrency(q.totalPayable)}</>}
                     </p>
                     {q.canAccept && q.validTill && (
                       <p className="text-xs text-amber-700">

@@ -12,6 +12,8 @@ import { ClickableThumbnail } from "@/components/ui/image-gallery";
 import { formatCurrency, formatDate, todayISO } from "@/lib/utils";
 import { ApiError } from "@/lib/erp-client";
 import { acceptQuotation, getMyQuotation } from "@/api/quotations";
+import { usePermissions } from "@/hooks/use-permissions";
+import { NoAccess } from "@/components/NoAccess";
 
 export const Route = createFileRoute("/quotations/$id")({
   component: QuotationDetailPage,
@@ -22,9 +24,13 @@ function QuotationDetailPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  const { can } = usePermissions();
+  const showPrice = can("see_price");
+  const canRaise = can("raise_order");
   const query = useQuery({
     queryKey: ["quotation", id],
     queryFn: () => getMyQuotation(id),
+    enabled: can("view_quotations"),
   });
 
   const [po, setPo] = React.useState("");
@@ -52,6 +58,8 @@ function QuotationDetailPage() {
           : "Could not accept this quotation.",
       ),
   });
+
+  if (!can("view_quotations")) return <NoAccess what="view quotations" />;
 
   if (query.isLoading) {
     return (
@@ -130,8 +138,10 @@ function QuotationDetailPage() {
                       {l.itemName || l.itemCode}
                     </Link>
                     <p className="text-xs text-zinc-500">
-                      {l.itemCode} · {l.qty} boxes × {formatCurrency(l.rate)}
-                      {l.discountPercentage > 0 &&
+                      {l.itemCode} · {l.qty} boxes
+                      {showPrice && ` × ${formatCurrency(l.rate)}`}
+                      {showPrice &&
+                        l.discountPercentage > 0 &&
                         ` (${l.discountPercentage}% off ${formatCurrency(l.priceListRate)})`}
                       {/* ISS-2026-00712 -- the dealer's own batch choice, carried
                           over from the enquiry this quotation was built from. */}
@@ -152,9 +162,11 @@ function QuotationDetailPage() {
                       </p>
                     )}
                   </div>
-                  <p className="shrink-0 font-medium tabular-nums text-zinc-900">
-                    {formatCurrency(l.amount)}
-                  </p>
+                  {showPrice && (
+                    <p className="shrink-0 font-medium tabular-nums text-zinc-900">
+                      {formatCurrency(l.amount)}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -168,29 +180,31 @@ function QuotationDetailPage() {
               </p>
             )}
 
-            <dl className="space-y-1.5 border-t border-zinc-200 pt-3 text-sm">
-              <Row label="Items total" value={formatCurrency(q.netTotal)} />
-              {q.taxes.map((t) => (
-                <Row
-                  key={t.description}
-                  label={`${t.description} (${t.rate}%)`}
-                  value={formatCurrency(t.amount)}
-                />
-              ))}
-              {q.freight > 0 && (
-                <Row label="Freight" value={formatCurrency(q.freight)} />
-              )}
-              <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold text-zinc-900">
-                <dt>Total</dt>
-                <dd className="tabular-nums">
-                  {formatCurrency(q.totalPayable)}
-                </dd>
-              </div>
-            </dl>
+            {showPrice && (
+              <dl className="space-y-1.5 border-t border-zinc-200 pt-3 text-sm">
+                <Row label="Items total" value={formatCurrency(q.netTotal)} />
+                {q.taxes.map((t) => (
+                  <Row
+                    key={t.description}
+                    label={`${t.description} (${t.rate}%)`}
+                    value={formatCurrency(t.amount)}
+                  />
+                ))}
+                {q.freight > 0 && (
+                  <Row label="Freight" value={formatCurrency(q.freight)} />
+                )}
+                <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold text-zinc-900">
+                  <dt>Total</dt>
+                  <dd className="tabular-nums">
+                    {formatCurrency(q.totalPayable)}
+                  </dd>
+                </div>
+              </dl>
+            )}
           </CardContent>
         </Card>
 
-        {q.canAccept ? (
+        {q.canAccept && canRaise ? (
           <Card>
             <CardContent className="space-y-3">
               <h2 className="text-sm font-semibold text-zinc-900">
@@ -230,11 +244,13 @@ function QuotationDetailPage() {
           <Card>
             <CardContent>
               <p className="text-sm text-zinc-700">
-                {q.status === "Ordered"
-                  ? "This quotation has been accepted and your order placed."
-                  : q.status === "Expired"
-                    ? "This quotation has expired. Please ask Pacific for a fresh one."
-                    : `This quotation is ${q.status.toLowerCase()} and can't be accepted.`}
+                {q.canAccept
+                  ? "Your account can't place orders. Please ask the person who manages your account with Pacific."
+                  : q.status === "Ordered"
+                    ? "This quotation has been accepted and your order placed."
+                    : q.status === "Expired"
+                      ? "This quotation has expired. Please ask Pacific for a fresh one."
+                      : `This quotation is ${q.status.toLowerCase()} and can't be accepted.`}
               </p>
             </CardContent>
           </Card>

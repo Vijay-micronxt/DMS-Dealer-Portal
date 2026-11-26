@@ -355,7 +355,21 @@ export type DealerProfile = {
   /** Whether this portal account has a password set -- drives the post-OTP
    * "set an email + password" prompt (components/SetCredentialsPrompt). */
   hasPassword: boolean;
+  /** 24 Nov 2026 -- the signed-in person's role at the dealer (each phone number has its own),
+   * and what that role may do. Absent on a backend that predates dealer roles. */
+  role?: DealerRole | null;
+  permissions?: DealerPermission[];
 };
+
+export type DealerRole = "Dealer Accounts" | "Dealer Sales";
+
+/** What a dealer role can be allowed to do; ticked per role in the ERP's DMS Sales Settings. */
+export type DealerPermission =
+  | "see_price"
+  | "view_quotations"
+  | "view_orders"
+  | "raise_order"
+  | "view_invoices";
 
 export type DealerDues = {
   outstanding: number;

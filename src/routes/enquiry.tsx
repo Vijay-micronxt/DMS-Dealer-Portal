@@ -43,6 +43,7 @@ import {
 } from "@/api/inquiries";
 import type { CatalogItem } from "@/api/types";
 import type { InquiryItemRow } from "@/api/types";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export const Route = createFileRoute("/enquiry")({
   component: EnquiryListPage,
@@ -135,6 +136,9 @@ function EnquiryListPage() {
   // The PO attached to the enquiry just sent: reused on the order, and required before it where the
   // site says so (the server enforces that either way).
   const sentPo = useMyPo(sentGroup);
+  // A role that may not raise orders is offered the quotation request only (server refuses too).
+  const { can } = usePermissions();
+  const canRaise = can("raise_order");
   const createOrderMutation = useMutation({
     mutationFn: () =>
       convertToOrder({
@@ -267,6 +271,7 @@ function EnquiryListPage() {
                 // Client request, 2 Nov 2026 -- once a quotation's been asked for, Pacific is
                 // now the one pricing this enquiry; self-service "Create order" no longer
                 // applies, so it's hidden instead of staying alongside the quotation request.
+                canRaise &&
                 allOrderable &&
                 !askForQuotationMutation.isSuccess && (
                   <div className="space-y-2 rounded-lg bg-zinc-50 p-3">
